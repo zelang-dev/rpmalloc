@@ -14,9 +14,9 @@
 #pragma GCC diagnostic ignored "-Wunused-result"
 #endif
 
-#include <rpmalloc.h>
-#include <thread.h>
-#include <test.h>
+#include "../rpmalloc/rpmalloc.h"
+#include "thread.h"
+#include "test.h"
 
 #include <fcntl.h>
 #include <stdint.h>

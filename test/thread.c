@@ -1,5 +1,5 @@
 
-#include <thread.h>
+#include "thread.h"
 #include <errno.h>
 
 #ifdef _MSC_VER
