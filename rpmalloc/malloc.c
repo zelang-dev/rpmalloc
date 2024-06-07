@@ -13,6 +13,8 @@
 // This file provides overrides for the standard library malloc entry points for C and new/delete operators for C++
 // It also provides automatic initialization/finalization of process and threads
 //
+#include "rpmalloc.h"
+
 #if defined(__TINYC__)
 #include <sys/types.h>
 #endif
