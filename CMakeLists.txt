@@ -12,13 +12,14 @@ set(C_STANDARD 89)
 
 include(CMakeDependentOption)
 include(GNUInstallDirs)
+include(CheckCCompilerFlag)
 include(CMakePackageConfigHelpers)
 
 message("Generated with config types: ${CMAKE_CONFIGURATION_TYPES}")
 
 set(CMAKE_CONFIGURATION_TYPES=Debug;Release)
-set(BUILD_DIR ${CMAKE_CURRENT_SOURCE_DIR}/build)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/built")
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/built")
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/built")
 
 cmake_dependent_option(BUILD_TESTING
@@ -27,19 +28,20 @@ cmake_dependent_option(BUILD_TESTING
 
 option(BUILD_SHARED_LIBS    "Build the library as a shared (dynamically-linked) " OFF)
 
-set(rpmalloc_files ${CMAKE_CURRENT_SOURCE_DIR}/rpmalloc/rpmalloc.c )
-
-add_definitions(-DENABLE_OVERRIDE=1)
+set(rpmalloc_files rpmalloc/rpmalloc.c )
 if(BUILD_SHARED_LIBS)
+    add_definitions(-DBUILD_DYNAMIC_LINK=1 -DENABLE_OVERRIDE=1)
     add_library(rpmalloc SHARED ${rpmalloc_files})
 else()
+    add_definitions(-DENABLE_OVERRIDE=1)
     add_library(rpmalloc STATIC ${rpmalloc_files})
 endif()
+set_property(TARGET rpmalloc PROPERTY POSITION_INDEPENDENT_CODE True)
 
 find_package(Threads)
 target_link_libraries(rpmalloc PUBLIC ${CMAKE_THREAD_LIBS_INIT})
 
-enable_testing()
 if(BUILD_TESTING)
+    enable_testing()
 	add_subdirectory(test)
 endif()

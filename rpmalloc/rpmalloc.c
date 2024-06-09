@@ -99,10 +99,6 @@
 //! Enable asserts
 #define ENABLE_ASSERTS            0
 #endif
-#ifndef ENABLE_OVERRIDE
-//! Override standard library malloc/free and new/delete entry points
-#define ENABLE_OVERRIDE           0
-#endif
 #ifndef ENABLE_PRELOAD
 //! Support preloading
 #define ENABLE_PRELOAD            0
@@ -286,6 +282,63 @@ static FORCEINLINE int     atomic_cas_ptr(atomicptr_t* dst, void* val, void* ref
 #define EXPECTED(x) (x)
 #define UNEXPECTED(x) (x)
 
+static struct impl_tls_dtor_entry {
+    tls_t key;
+    tls_dtor_t dtor;
+} impl_tls_dtor_tbl[EMULATED_THREADS_TSS_DTOR_SLOTNUM];
+
+static int impl_tls_dtor_register(tls_t key, tls_dtor_t dtor) {
+    int i;
+    for (i = 0; i < EMULATED_THREADS_TSS_DTOR_SLOTNUM; i++) {
+        if (!impl_tls_dtor_tbl[i].dtor)
+            break;
+    }
+
+    if (i == EMULATED_THREADS_TSS_DTOR_SLOTNUM)
+        return 1;
+
+    impl_tls_dtor_tbl[i].key = key;
+    impl_tls_dtor_tbl[i].dtor = dtor;
+
+    return 0;
+}
+
+static void impl_tls_dtor_invoke() {
+    int i;
+    for (i = 0; i < EMULATED_THREADS_TSS_DTOR_SLOTNUM; i++) {
+        if (impl_tls_dtor_tbl[i].dtor) {
+            void *val = rpmalloc_tls_get(impl_tls_dtor_tbl[i].key);
+            if (val)
+                (impl_tls_dtor_tbl[i].dtor)(val);
+        }
+    }
+}
+
+int rpmalloc_tls_create(tls_t *key, tls_dtor_t dtor) {
+    if (!key) return -1;
+
+    *key = TlsAlloc();
+    if (dtor) {
+        if (impl_tls_dtor_register(*key, dtor)) {
+            TlsFree(*key);
+            return -1;
+        }
+    }
+
+    return (*key != 0xFFFFFFFF) ? 0 : -1;
+}
+
+FORCEINLINE void rpmalloc_tls_delete(tls_t key) {
+    TlsFree(key);
+}
+
+FORCEINLINE void *rpmalloc_tls_get(tls_t key) {
+    return TlsGetValue(key);
+}
+
+FORCEINLINE int rpmalloc_tls_set(tls_t key, void *val) {
+    return TlsSetValue(key, val) ? 0 : -1;
+}
 #else
 
 #include <stdatomic.h>
@@ -312,6 +365,23 @@ static FORCEINLINE int     atomic_cas_ptr(atomicptr_t* dst, void* val, void* ref
 #define EXPECTED(x) __builtin_expect((x), 1)
 #define UNEXPECTED(x) __builtin_expect((x), 0)
 
+int rpmalloc_tls_create(tls_t *key, tls_dtor_t dtor) {
+    if (!key) return -1;
+
+    return (pthread_key_create(key, dtor) == 0) ? 0 : -1;
+}
+
+FORCEINLINE void rpmalloc_tls_delete(tls_t key) {
+    pthread_key_delete(key);
+}
+
+FORCEINLINE void *rpmalloc_tls_get(tls_t key) {
+    return pthread_getspecific(key);
+}
+
+FORCEINLINE int rpmalloc_tls_set(tls_t key, void *val) {
+    return (pthread_setspecific(key, val) == 0) ? 0 : -1;
+}
 #endif
 
 ////////////
@@ -652,7 +722,7 @@ struct global_cache_t {
 #define _memory_default_span_mask (~((uintptr_t)(_memory_span_size - 1)))
 
 //! Initialized flag
-static int _rpmalloc_initialized;
+static int _rpmalloc_initialized = 0;
 //! Main thread ID
 static uintptr_t _rpmalloc_main_thread_id;
 //! Configuration
@@ -742,32 +812,11 @@ static int32_t _huge_pages_peak;
 //////
 
 //! Current thread heap
-#if ((defined(__APPLE__) || defined(__HAIKU__)) && ENABLE_PRELOAD) || defined(__TINYC__) || defined(FORCED_SPECIFIC)
-static pthread_key_t _memory_thread_heap;
-#else
-#  ifdef _MSC_VER
-#    define _Thread_local __declspec(thread)
-#    define TLS_MODEL
-#  else
-#    ifndef __HAIKU__
-#      define TLS_MODEL __attribute__((tls_model("initial-exec")))
-#    else
-#      define TLS_MODEL
-#    endif
-#    if !defined(__clang__) && defined(__GNUC__)
-#      define _Thread_local __thread
-#    endif
-#  endif
-static _Thread_local heap_t* _memory_thread_heap TLS_MODEL;
-#endif
+static tls_t _memory_thread_heap = 0;
 
-static inline heap_t*
+static inline heap_t *
 get_thread_heap_raw(void) {
-#if ((defined(__APPLE__) || defined(__HAIKU__)) && ENABLE_PRELOAD) || defined(__TINYC__) || defined(FORCED_SPECIFIC)
-	return pthread_getspecific(_memory_thread_heap);
-#else
-	return _memory_thread_heap;
-#endif
+    return (heap_t *)rpmalloc_tls_get(_memory_thread_heap);
 }
 
 //! Get the current thread heap
@@ -820,11 +869,7 @@ get_thread_id(void) {
 //! Set the current thread heap
 static void
 set_thread_heap(heap_t* heap) {
-#if ((defined(__APPLE__) || defined(__HAIKU__)) && ENABLE_PRELOAD) || defined(__TINYC__) || defined(FORCED_SPECIFIC)
-	pthread_setspecific(_memory_thread_heap, heap);
-#else
-	_memory_thread_heap = heap;
-#endif
+    rpmalloc_tls_set(_memory_thread_heap, (void *)heap);
 	if (heap)
 		heap->owner_thread = get_thread_id();
 }
@@ -2935,10 +2980,8 @@ rpmalloc_initialize_config(const rpmalloc_config_t* config) {
 	_memory_config.span_map_count = _memory_span_map_count;
 	_memory_config.enable_huge_pages = _memory_huge_pages;
 
-#if ((defined(__APPLE__) || defined(__HAIKU__)) && ENABLE_PRELOAD) || defined(__TINYC__) || defined(FORCED_SPECIFIC)
-	if (pthread_key_create(&_memory_thread_heap, _rpmalloc_heap_release_raw_fc))
-		return -1;
-#endif
+    if (rpmalloc_tls_create(&_memory_thread_heap, _rpmalloc_heap_release_raw_fc) != 0)
+        return -1;
 #if defined(_WIN32) && (!defined(BUILD_DYNAMIC_LINK) || !BUILD_DYNAMIC_LINK)
 	fls_key = FlsAlloc(&_rpmalloc_thread_destructor);
 #endif
@@ -3022,12 +3065,10 @@ rpmalloc_finalize(void) {
 		_rpmalloc_global_cache_finalize(&_memory_span_cache[iclass]);
 #endif
 
-#if ((defined(__APPLE__) || defined(__HAIKU__)) && ENABLE_PRELOAD) || defined(__TINYC__) || defined(FORCED_SPECIFIC)
-	pthread_key_delete(_memory_thread_heap);
-#endif
+    rpmalloc_tls_delete(_memory_thread_heap);
 #if defined(_WIN32) && (!defined(BUILD_DYNAMIC_LINK) || !BUILD_DYNAMIC_LINK)
-	FlsFree(fls_key);
-	fls_key = 0;
+    FlsFree(fls_key);
+    fls_key = 0;
 #endif
 #if ENABLE_STATISTICS
 	//If you hit these asserts you probably have memory leaks (perhaps global scope data doing dynamic allocations) or double frees in your code
@@ -3623,16 +3664,32 @@ rpmalloc_get_heap_for_ptr(void* ptr)
 	}
 	return 0;
 }
-
 #endif
 
-#if ENABLE_PRELOAD || ENABLE_OVERRIDE
+#if ENABLE_OVERRIDE
+static void rp_override_init(void) {
+    if (!_rpmalloc_initialized) {
+        rpmalloc_initialize();
+        atexit(rpmalloc_finalize);
+    }
+}
 
-#include "malloc.c"
+void *rp_malloc(size_t size) {
+    rp_override_init();
+    return rpmalloc(size);
+}
 
+void *rp_calloc(size_t count, size_t size) {
+    rp_override_init();
+    return rpcalloc(count, size);
+}
+
+void *rp_realloc(void *ptr, size_t size) {
+    rp_override_init();
+    return rprealloc(ptr, size);
+}
 #endif
 
-void
-rpmalloc_linker_reference(void) {
+void rpmalloc_linker_reference(void) {
 	(void)sizeof(_rpmalloc_initialized);
 }
