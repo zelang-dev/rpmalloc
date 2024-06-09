@@ -1,4 +1,4 @@
-include_directories(${CMAKE_SOURCE_DIR}/rpmalloc)
+include_directories(${CMAKE_SOURCE_DIR}/rpmalloc ${CMAKE_SOURCE_DIR}/test)
 
 add_executable(main_test thread.c main.c)
 target_link_libraries(main_test rpmalloc)

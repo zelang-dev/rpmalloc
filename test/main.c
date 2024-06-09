@@ -14,13 +14,12 @@
 #pragma GCC diagnostic ignored "-Wunused-result"
 #endif
 
-#include "rpmalloc.h"
-#include "thread.h"
-#include "test.h"
+#include <rpmalloc.h>
+#include <thread.h>
+#include <test.h>
 
 #include <fcntl.h>
 #include <stdint.h>
-#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
@@ -1135,7 +1134,7 @@ test_first_class_heaps(void) {
 	return 0;
 }
 
-static int got_error;
+static int got_error = 0;
 
 static void
 test_error_callback(const char* message) {
@@ -1242,7 +1241,7 @@ int test_free(int print_log) {
 /* Thread function: Compile time thread-local storage */
 static int thread_test_local_storage(void *aArg) {
     int thread = *(int *)aArg;
-    rpfree(aArg);
+    free(aArg);
 
     int data = thread + rand();
     *gLocalVar() = data;
@@ -1272,7 +1271,7 @@ int test_thread_storage(void) {
         return test_fail("thread_local_get macro test failed\n");
 
     for (int i = 0; i < THREAD_COUNT; ++i) {
-        int *n = rpmalloc(sizeof * n);  // Holds a thread serial number
+        int *n = malloc(sizeof * n);  // Holds a thread serial number
         if (!n)
             return test_fail("malloc failed");
 
@@ -1291,6 +1290,7 @@ int test_thread_storage(void) {
     if (*gLocalVar() != 1)
         return test_fail("thread_local_get macro test failed\n");
 
+    gLocalVar_delete();
     printf("Emulated thread-local storage tests passed\n");
     return 0;
 }

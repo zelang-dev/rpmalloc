@@ -908,12 +908,13 @@ _rpmalloc_spin(void) {
 
 #if defined(_WIN32) && (!defined(BUILD_DYNAMIC_LINK) || !BUILD_DYNAMIC_LINK)
 static void NTAPI
-_rpmalloc_thread_destructor(void* value) {
+_rpmalloc_thread_destructor(void *value) {
 #if ENABLE_OVERRIDE
+    impl_tls_dtor_invoke();
 	// If this is called on main thread it means rpmalloc_finalize
 	// has not been called and shutdown is forced (through _exit) or unclean
-	if (get_thread_id() == _rpmalloc_main_thread_id)
-		return;
+    if (get_thread_id() == _rpmalloc_main_thread_id)
+        return;
 #endif
 	if (value)
 		rpmalloc_thread_finalize(1);

@@ -28,6 +28,12 @@ cmake_dependent_option(BUILD_TESTING
 
 option(BUILD_SHARED_LIBS    "Build the library as a shared (dynamically-linked) " OFF)
 
+if(UNIX)
+    set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -g -D ENABLE_ASSERTS=1")
+else()
+    set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} /D ENABLE_ASSERTS=1 ")
+endif()
+
 set(rpmalloc_files rpmalloc/rpmalloc.c )
 if(BUILD_SHARED_LIBS)
     add_definitions(-DBUILD_DYNAMIC_LINK=1 -DENABLE_OVERRIDE=1)
