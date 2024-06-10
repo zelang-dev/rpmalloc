@@ -12,8 +12,9 @@
 #endif
 #if defined(__GNUC__)
 #pragma GCC diagnostic ignored "-Wunused-result"
-#endif
 #define _GNU_SOURCE
+#endif
+
 #include <rpmalloc.h>
 #include <thread.h>
 #include <test.h>

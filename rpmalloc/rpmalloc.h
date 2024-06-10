@@ -460,7 +460,6 @@ C_API int rpmalloc_tls_set(tls_t key, void *val);
 #define thread_storage_create(type, var) thread_storage_proto(type, var, C_API)
 #endif /* thread_storage */
 
-#ifdef ENABLE_OVERRIDE
 //! Override standard library malloc/free etc macros
 #undef malloc
 #undef calloc
@@ -475,7 +474,6 @@ C_API void *RPMALLOC_CDECL rp_realloc(void *ptr, size_t size);
 #define calloc rp_calloc
 #define realloc rp_realloc
 #define free rpfree
-#endif
 
 #if defined(__TINYC__)
 #include <sys/types.h>
