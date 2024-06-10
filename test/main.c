@@ -13,7 +13,7 @@
 #if defined(__GNUC__)
 #pragma GCC diagnostic ignored "-Wunused-result"
 #endif
-
+#define _GNU_SOURCE
 #include <rpmalloc.h>
 #include <thread.h>
 #include <test.h>
@@ -1358,7 +1358,7 @@ test_initialize(void) {
 }
 
 #elif (defined(__linux__) || defined(__linux))
-
+#include <sched.h>
 static void
 test_initialize(void) {
 	cpu_set_t prevmask, testmask;

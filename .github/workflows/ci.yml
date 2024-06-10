@@ -31,7 +31,7 @@ jobs:
             cmake --build .
       - name: Run test
         run: |
-            cd built/Debug
+            cd built
             ./main_test
 
   build-windows:
@@ -74,5 +74,5 @@ jobs:
             cmake --build .
       - name: Run test examples
         run: |
-            cd build/Debug
+            cd built
             ./main_test

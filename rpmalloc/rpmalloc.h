@@ -380,6 +380,7 @@ typedef DWORD tls_t;
 #define EMULATED_THREADS_TSS_DTOR_SLOTNUM 1088
 #elif defined(__unix__) || defined(__unix)
 #include <pthread.h>
+#include <stdlib.h>
 typedef pthread_key_t tls_t;
 #else
 #error Not supported on this platform.
