@@ -2,9 +2,9 @@ cmake_minimum_required(VERSION 2.8...3.14)
 
 project(
     rpmalloc
-    VERSION 1.4.5
+    VERSION 1.4.6
     DESCRIPTION "General Purpose Memory Allocator"
-    HOMEPAGE_URL "https://github.com/mjansson/rpmalloc"
+    HOMEPAGE_URL "https://github.com/zelang-dev/rpmalloc"
     LANGUAGES C
 )
 
@@ -41,11 +41,10 @@ else()
 endif()
 
 set(rpmalloc_files rpmalloc/rpmalloc.c )
+add_definitions(-DENABLE_OVERRIDE=1)
 if(BUILD_SHARED_LIBS)
-    add_definitions(-DBUILD_DYNAMIC_LINK=1 -DENABLE_OVERRIDE=1)
     add_library(rpmalloc SHARED ${rpmalloc_files})
 else()
-    add_definitions(-DENABLE_OVERRIDE=1)
     add_library(rpmalloc STATIC ${rpmalloc_files})
 endif()
 set_property(TARGET rpmalloc PROPERTY POSITION_INDEPENDENT_CODE True)
