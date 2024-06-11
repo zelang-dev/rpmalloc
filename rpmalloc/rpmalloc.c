@@ -3635,11 +3635,11 @@ rpmalloc_get_heap_for_ptr(void* ptr)
 }
 #endif
 
-#if ENABLE_OVERRIDE
 static void rp_override_init(void) {
     if (!_rpmalloc_initialized) {
         rpmalloc_initialize();
-        atexit(rpmalloc_finalize);
+    } else if (!rpmalloc_is_thread_initialized()) {
+        rpmalloc_thread_initialize();
     }
 }
 
@@ -3657,7 +3657,11 @@ void *rp_realloc(void *ptr, size_t size) {
     rp_override_init();
     return rprealloc(ptr, size);
 }
-#endif
+
+void rp_free(void *ptr) {
+    rpfree(ptr);
+    rpmalloc_thread_finalize(1);
+}
 
 void rpmalloc_linker_reference(void) {
 	(void)sizeof(_rpmalloc_initialized);

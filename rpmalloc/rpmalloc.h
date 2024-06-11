@@ -428,7 +428,7 @@ C_API int rpmalloc_tls_set(tls_t key, void *val);
 #define thread_storage_free(var)                \
         void var##_free(void *ptr) {            \
             if (ptr != NULL) {                  \
-                free(ptr);                      \
+                rpfree(ptr);                      \
                 rpmalloc_thread_finalize(1);    \
             }                                   \
         }
@@ -439,7 +439,7 @@ C_API int rpmalloc_tls_set(tls_t key, void *val);
                 rpmalloc_##var##_tls = 0;   \
                 void *ptr = rpmalloc_tls_get(rpmalloc_##var##_tss);  \
                 if (ptr != NULL)            \
-                    free(ptr);              \
+                    rpfree(ptr);              \
                 rpmalloc_finalize();        \
                 if(rpmalloc_is_thread_initialized())            \
                     rpmalloc_tls_delete(rpmalloc_##var##_tss);  \
@@ -474,11 +474,12 @@ C_API int rpmalloc_tls_set(tls_t key, void *val);
 C_API void *RPMALLOC_CDECL rp_malloc(size_t size);
 C_API void *RPMALLOC_CDECL rp_calloc(size_t count, size_t size);
 C_API void *RPMALLOC_CDECL rp_realloc(void *ptr, size_t size);
+C_API void RPMALLOC_CDECL rp_free(void *ptr);
 
 #define malloc rp_malloc
 #define calloc rp_calloc
 #define realloc rp_realloc
-#define free rpfree
+#define free rp_free
 
 #if defined(__TINYC__)
 #include <sys/types.h>
