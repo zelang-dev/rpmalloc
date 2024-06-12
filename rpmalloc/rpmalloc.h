@@ -400,20 +400,16 @@ C_API int rpmalloc_tls_set(tls_t key, void *val);
 #ifndef thread_storage
 #define thread_storage_get(type, var)                   \
         type* var(void) {                               \
-            int is_main = 0;                            \
             if (rpmalloc_##var##_tls == 0) {            \
                 rpmalloc_##var##_tls = sizeof(type);    \
-                is_main = 1;                            \
                 rpmalloc_initialize();                  \
-                if (rpmalloc_tls_create(rpmalloc_##var##_tss, var##_free) == 0)    \
+                if (rpmalloc_tls_create(rpmalloc_##var##_tss, free) == 0)    \
                     atexit(var##_delete);               \
                 else                                    \
                     goto err;                           \
             }                                           \
             void *ptr = rpmalloc_tls_get(rpmalloc_##var##_tss); \
             if (ptr == NULL) {                          \
-                if (!is_main)                           \
-                    rpmalloc_thread_initialize();       \
                 ptr = malloc(rpmalloc_##var##_tls);     \
                 if (ptr == NULL)                        \
                     goto err;                           \
@@ -423,14 +419,6 @@ C_API int rpmalloc_tls_set(tls_t key, void *val);
             return (type *)ptr;                         \
         err:                                            \
             return NULL;                                \
-        }
-
-#define thread_storage_free(var)                \
-        void var##_free(void *ptr) {            \
-            if (ptr != NULL) {                  \
-                rpfree(ptr);                      \
-                rpmalloc_thread_finalize(1);    \
-            }                                   \
         }
 
 #define thread_storage_delete(type, var)    \
@@ -450,7 +438,6 @@ C_API int rpmalloc_tls_set(tls_t key, void *val);
 #define thread_storage(type, var)           \
         int rpmalloc_##var##_tls = 0;       \
         tls_t rpmalloc_##var##_tss = {0};  \
-        thread_storage_free(var)            \
         thread_storage_delete(type, var)    \
         thread_storage_get(type, var)
 
@@ -458,7 +445,6 @@ C_API int rpmalloc_tls_set(tls_t key, void *val);
         prefix int rpmalloc_##var##_tls;        \
         prefix tls_t rpmalloc_##var##_tss;      \
         prefix type* var(void);                 \
-        prefix void var##_free(void *ptr);      \
         prefix void var##_delete(void);
 
 /* Creates a compile time thread local storage variable */

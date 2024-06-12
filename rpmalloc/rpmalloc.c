@@ -257,6 +257,12 @@ extern int madvise(caddr_t, size_t, int);
 ///
 //////
 
+//! Current thread heap
+static tls_t _memory_thread_heap = {0};
+
+//! Initialized flag
+static int _rpmalloc_initialized = 0;
+
 #if defined(_MSC_VER) && !defined(__clang__)
 
 typedef volatile long      atomic32_t;
@@ -298,8 +304,8 @@ void rpmalloc_tls_delete(tls_t key) {
     if (key->terminated == 0) {
         key->terminated = 1;
         TlsFree(key->tss_key);
-        if (key->fls_key != 0)
-            FlsFree(key->fls_key);
+        //if (key->fls_key != 0)
+        //    FlsFree(key->fls_key);
 
         key->fls_key = 0;
         key->tss_key = 0;
@@ -698,8 +704,6 @@ struct global_cache_t {
 #define _memory_default_span_size_shift 16
 #define _memory_default_span_mask (~((uintptr_t)(_memory_span_size - 1)))
 
-//! Initialized flag
-static int _rpmalloc_initialized = 0;
 //! Main thread ID
 static uintptr_t _rpmalloc_main_thread_id;
 //! Configuration
@@ -788,8 +792,6 @@ static int32_t _huge_pages_peak;
 ///
 //////
 
-//! Current thread heap
-static tls_t _memory_thread_heap = {0};
 
 static inline heap_t *
 get_thread_heap_raw(void) {
@@ -3016,6 +3018,9 @@ rpmalloc_initialize_config(const rpmalloc_config_t* config) {
 //! Finalize the allocator
 void
 rpmalloc_finalize(void) {
+    if (_memory_thread_heap->terminated == 1 || _rpmalloc_initialized == 0)
+        return;
+
     rpmalloc_thread_finalize(1);
 	//rpmalloc_dump_statistics(stdout);
 
