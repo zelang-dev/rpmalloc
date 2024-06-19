@@ -292,7 +292,7 @@ int rpmalloc_tls_create(tls_t key, tls_dtor_t dtor) {
 
     key->tss_key = TlsAlloc();
 #if defined(_WIN32) && (!defined(BUILD_DYNAMIC_LINK) || !BUILD_DYNAMIC_LINK)
-    key->fls_key = FlsAlloc(dtor);
+    key->fls_key = FlsAlloc((PFLS_CALLBACK_FUNCTION)dtor);
 #else
     key->fls_key = 0;
 #endif
@@ -304,8 +304,8 @@ void rpmalloc_tls_delete(tls_t key) {
     if (key->terminated == 0) {
         key->terminated = 1;
         TlsFree(key->tss_key);
-        //if (key->fls_key != 0)
-        //    FlsFree(key->fls_key);
+        if (key->fls_key != 0)
+            FlsFree(key->fls_key);
 
         key->fls_key = 0;
         key->tss_key = 0;

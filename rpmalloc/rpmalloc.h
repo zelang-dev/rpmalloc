@@ -403,14 +403,14 @@ C_API int rpmalloc_tls_set(tls_t key, void *val);
             if (rpmalloc_##var##_tls == 0) {            \
                 rpmalloc_##var##_tls = sizeof(type);    \
                 rpmalloc_initialize();                  \
-                if (rpmalloc_tls_create(rpmalloc_##var##_tss, free) == 0)    \
+                if (rpmalloc_tls_create(rpmalloc_##var##_tss, rp_free) == 0)    \
                     atexit(var##_delete);               \
                 else                                    \
                     goto err;                           \
             }                                           \
             void *ptr = rpmalloc_tls_get(rpmalloc_##var##_tss); \
             if (ptr == NULL) {                          \
-                ptr = malloc(rpmalloc_##var##_tls);     \
+                ptr = rp_malloc(rpmalloc_##var##_tls);  \
                 if (ptr == NULL)                        \
                     goto err;                           \
                 if ((rpmalloc_tls_set(rpmalloc_##var##_tss, ptr)) != 0)	\
@@ -427,7 +427,7 @@ C_API int rpmalloc_tls_set(tls_t key, void *val);
                 rpmalloc_##var##_tls = 0;   \
                 void *ptr = rpmalloc_tls_get(rpmalloc_##var##_tss);  \
                 if (ptr != NULL)            \
-                    rpfree(ptr);              \
+                    rpfree(ptr);            \
                 rpmalloc_finalize();        \
                 if(rpmalloc_is_thread_initialized())            \
                     rpmalloc_tls_delete(rpmalloc_##var##_tss);  \
@@ -437,7 +437,7 @@ C_API int rpmalloc_tls_set(tls_t key, void *val);
 /* Initialize and setup thread local storage `var` name as functions. */
 #define thread_storage(type, var)           \
         int rpmalloc_##var##_tls = 0;       \
-        tls_t rpmalloc_##var##_tss = {0};  \
+        tls_t rpmalloc_##var##_tss = {0};   \
         thread_storage_delete(type, var)    \
         thread_storage_get(type, var)
 
