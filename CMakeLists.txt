@@ -22,6 +22,10 @@ include(CMakePackageConfigHelpers)
 include(CTest)
 
 message("Generated with config types: ${CMAKE_CONFIGURATION_TYPES}")
+if(WIN32 AND $ENV{Platform} STREQUAL x86)
+    message("Building Windows x86-32bit")
+    add_definitions(-D_WIN32_PLATFORM_X86=1)
+endif()
 
 set(CMAKE_CONFIGURATION_TYPES=Debug;Release)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/built")

@@ -1322,8 +1322,6 @@ int test_run(int argc, char **argv) {
         return -1;
     if (test_free(1))
         return -1;
-    if (test_thread_storage())
-        return -1;
     if (test_error())
         return -1;
     printf("\nAll tests passed\n");

@@ -200,7 +200,7 @@
 #include <string.h>
 #include <errno.h>
 
-#if defined(_WIN32) && (!defined(BUILD_DYNAMIC_LINK) || !BUILD_DYNAMIC_LINK)
+#if defined(_WIN32)
 #include <fibersapi.h>
 #endif
 
@@ -287,29 +287,56 @@ static FORCEINLINE int     atomic_cas_ptr(atomicptr_t* dst, void* val, void* ref
 #define EXPECTED(x) (x)
 #define UNEXPECTED(x) (x)
 
+#ifdef _WIN32_PLATFORM_X86
+static struct impl_tls_dtor_entry {
+    tls_t key;
+    tls_dtor_t dtor;
+} impl_tls_dtor_tbl[EMULATED_THREADS_TSS_DTOR_SLOTNUM];
+
+static int impl_tls_dtor_register(tls_t key, tls_dtor_t dtor) {
+    int i;
+    for (i = 0; i < EMULATED_THREADS_TSS_DTOR_SLOTNUM; i++) {
+        if (!impl_tls_dtor_tbl[i].dtor)
+            break;
+    }
+
+    if (i == EMULATED_THREADS_TSS_DTOR_SLOTNUM)
+        return 1;
+
+    *impl_tls_dtor_tbl[i].key = *key;
+    impl_tls_dtor_tbl[i].dtor = dtor;
+
+    return 0;
+}
+
+static void impl_tls_dtor_invoke() {
+    int i;
+    for (i = 0; i < EMULATED_THREADS_TSS_DTOR_SLOTNUM; i++) {
+        if (impl_tls_dtor_tbl[i].dtor) {
+            void *val = rpmalloc_tls_get(impl_tls_dtor_tbl[i].key);
+            if (val)
+                (impl_tls_dtor_tbl[i].dtor)(val);
+        }
+    }
+}
+
 int rpmalloc_tls_create(tls_t key, tls_dtor_t dtor) {
     if (!key) return -1;
 
     key->tss_key = TlsAlloc();
-#if defined(_WIN32) && (!defined(BUILD_DYNAMIC_LINK) || !BUILD_DYNAMIC_LINK)
-    key->fls_key = FlsAlloc((PFLS_CALLBACK_FUNCTION)dtor);
-#else
-    key->fls_key = 0;
-#endif
+    if (dtor) {
+        if (impl_tls_dtor_register(key, dtor)) {
+            TlsFree(key->tss_key);
+            return -1;
+        }
+    }
+
     key->terminated = 0;
     return (key->tss_key != 0xFFFFFFFF) ? 0 : -1;
 }
 
-void rpmalloc_tls_delete(tls_t key) {
-    if (key->terminated == 0) {
-        key->terminated = 1;
-        TlsFree(key->tss_key);
-        if (key->fls_key != 0)
-            FlsFree(key->fls_key);
-
-        key->fls_key = 0;
-        key->tss_key = 0;
-    }
+FORCEINLINE void rpmalloc_tls_delete(tls_t key) {
+    TlsFree(key->tss_key);
 }
 
 FORCEINLINE void *rpmalloc_tls_get(tls_t key) {
@@ -317,11 +344,33 @@ FORCEINLINE void *rpmalloc_tls_get(tls_t key) {
 }
 
 FORCEINLINE int rpmalloc_tls_set(tls_t key, void *val) {
-#if defined(_WIN32) && (!defined(BUILD_DYNAMIC_LINK) || !BUILD_DYNAMIC_LINK)
-    FlsSetValue(key->fls_key, val);
-#endif
     return TlsSetValue(key->tss_key, val) ? 0 : -1;
 }
+#else
+int rpmalloc_tls_create(tls_t key, tls_dtor_t dtor) {
+    if (!key) return -1;
+
+    key->fls_key = FlsAlloc((PFLS_CALLBACK_FUNCTION)dtor);
+    key->terminated = 0;
+    return (key->fls_key != 0xFFFFFFFF) ? 0 : -1;
+}
+
+void rpmalloc_tls_delete(tls_t key) {
+    if (key->terminated == 0) {
+        key->terminated = 1;
+        FlsFree(key->fls_key);
+        key->fls_key = 0;
+    }
+}
+
+FORCEINLINE void *rpmalloc_tls_get(tls_t key) {
+    return FlsGetValue(key->fls_key);
+}
+
+FORCEINLINE int rpmalloc_tls_set(tls_t key, void *val) {
+    return FlsSetValue(key->fls_key, val) ? 0 : -1;
+}
+#endif
 #else
 
 #include <stdatomic.h>
@@ -792,7 +841,6 @@ static int32_t _huge_pages_peak;
 ///
 //////
 
-
 static inline heap_t *
 get_thread_heap_raw(void) {
     return (heap_t *)rpmalloc_tls_get(_memory_thread_heap);
@@ -885,16 +933,18 @@ _rpmalloc_spin(void) {
 #endif
 }
 
-#if defined(_WIN32) && (!defined(BUILD_DYNAMIC_LINK) || !BUILD_DYNAMIC_LINK)
+#if defined(_WIN32)
 static void NTAPI
 _rpmalloc_thread_destructor(void *value) {
-#if ENABLE_OVERRIDE
+#ifdef _WIN32_PLATFORM_X86
+    impl_tls_dtor_invoke();
+#endif
 	// If this is called on main thread it means rpmalloc_finalize
 	// has not been called and shutdown is forced (through _exit) or unclean
     if (get_thread_id() == _rpmalloc_main_thread_id)
         return;
-#endif
-	if (value)
+
+    if (value)
 		rpmalloc_thread_finalize(1);
 }
 #endif
@@ -2959,9 +3009,13 @@ rpmalloc_initialize_config(const rpmalloc_config_t* config) {
 	_memory_config.span_map_count = _memory_span_map_count;
 	_memory_config.enable_huge_pages = _memory_huge_pages;
 
-#if defined(_WIN32) && (!defined(BUILD_DYNAMIC_LINK) || !BUILD_DYNAMIC_LINK)
-    if (rpmalloc_tls_create(_memory_thread_heap, (tls_dtor_t)_rpmalloc_thread_destructor) != 0)
+#if defined(_WIN32)
+#ifdef _WIN32_PLATFORM_X86
+    _memory_thread_heap->fls_key = FlsAlloc(_rpmalloc_thread_destructor);
+#else
+    if (rpmalloc_tls_create(_memory_thread_heap, _rpmalloc_thread_destructor) != 0)
         return -1;
+#endif
 #else
     if (rpmalloc_tls_create(_memory_thread_heap, _rpmalloc_heap_release_raw_fc) != 0)
         return -1;
@@ -3018,8 +3072,10 @@ rpmalloc_initialize_config(const rpmalloc_config_t* config) {
 //! Finalize the allocator
 void
 rpmalloc_finalize(void) {
+#ifndef _WIN32_PLATFORM_X86
     if (_memory_thread_heap->terminated == 1 || _rpmalloc_initialized == 0)
         return;
+#endif
 
     rpmalloc_thread_finalize(1);
 	//rpmalloc_dump_statistics(stdout);
@@ -3640,9 +3696,18 @@ rpmalloc_get_heap_for_ptr(void* ptr)
 }
 #endif
 
+void rpmalloc_atexit(void) {
+    void *ptr = rpmalloc_tls_get(_memory_thread_heap);
+    if (ptr != NULL || rpmalloc_is_thread_initialized())
+        rp_free(_memory_thread_heap);
+    rpmalloc_finalize();
+    rpmalloc_tls_delete(_memory_thread_heap);
+}
+
 static void rp_override_init(void) {
     if (!_rpmalloc_initialized) {
         rpmalloc_initialize();
+        atexit(rpmalloc_atexit);
     } else if (!rpmalloc_is_thread_initialized()) {
         rpmalloc_thread_initialize();
     }
