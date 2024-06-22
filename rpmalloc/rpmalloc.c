@@ -335,9 +335,22 @@ int rpmalloc_tls_create(tls_t *key, tls_dtor_t dtor) {
 
     return (*key != 0xFFFFFFFF) ? 0 : -1;
 }
+#else
 
-FORCEINLINE void rpmalloc_tls_delete(tls_t key) {
-    TlsFree(key);
+int rpmalloc_tls_create(tls_t *key, tls_dtor_t dtor) {
+    if (!key) return -1;
+
+    FlsAlloc(dtor);
+    *key = TlsAlloc();
+    return (*key != 0xFFFFFFFF) ? 0 : -1;
+}
+#endif
+
+void rpmalloc_tls_delete(tls_t key) {
+    if (key != 0) {
+        TlsFree(key);
+        key = 0;
+    }
 }
 
 FORCEINLINE void *rpmalloc_tls_get(tls_t key) {
@@ -347,29 +360,6 @@ FORCEINLINE void *rpmalloc_tls_get(tls_t key) {
 FORCEINLINE int rpmalloc_tls_set(tls_t key, void *val) {
     return TlsSetValue(key, val) ? 0 : -1;
 }
-#else
-int rpmalloc_tls_create(tls_t *key, tls_dtor_t dtor) {
-    if (!key) return -1;
-
-    *key = FlsAlloc((PFLS_CALLBACK_FUNCTION)dtor);
-    return (*key != 0xFFFFFFFF) ? 0 : -1;
-}
-
-void rpmalloc_tls_delete(tls_t key) {
-    if (key != 0) {
-        FlsFree(key);
-        key = 0;
-    }
-}
-
-FORCEINLINE void *rpmalloc_tls_get(tls_t key) {
-    return FlsGetValue(key);
-}
-
-FORCEINLINE int rpmalloc_tls_set(tls_t key, void *val) {
-    return FlsSetValue(key, val) ? 0 : -1;
-}
-#endif
 #else
 
 #include <stdatomic.h>
