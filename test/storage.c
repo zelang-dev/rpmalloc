@@ -154,6 +154,7 @@ int test_thread_storage(void) {
     if (*gLocalVar() != 1)
         return test_fail("thread_local_get macro test failed\n");
 
+    gLocalVar_delete();
     printf("Emulated thread-local storage tests passed\n");
     return 0;
 }

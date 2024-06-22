@@ -375,26 +375,17 @@ rpmalloc_get_heap_for_ptr(void* ptr);
 
 #if defined(_WIN32) && defined(_MSC_VER)
 #include <windows.h>
+typedef DWORD tls_t;
 /* see TLS_MAXIMUM_AVAILABLE */
 #define EMULATED_THREADS_TSS_DTOR_SLOTNUM 1088
-typedef struct tls_s {
-    DWORD tss_key;
-    DWORD fls_key;
-    int terminated;
-} tls_t[1];
-typedef VOID(NTAPI *tls_dtor_t)(_In_ PVOID lpFlsData);
 #else
 #include <pthread.h>
 #include <stdlib.h>
-typedef struct tls_s {
-    pthread_key_t tss_key;
-    int terminated;
-} tls_t[1];
-typedef void (*tls_dtor_t)(void *);
+typedef pthread_key_t tls_t;
 #endif
+typedef void (*tls_dtor_t)(void *);
 
-C_API void rpmalloc_atexit(void);
-C_API int rpmalloc_tls_create(tls_t key, tls_dtor_t dtor);
+C_API int rpmalloc_tls_create(tls_t *key, tls_dtor_t dtor);
 C_API void rpmalloc_tls_delete(tls_t key);
 C_API void *rpmalloc_tls_get(tls_t key);
 C_API int rpmalloc_tls_set(tls_t key, void *val);
@@ -405,15 +396,14 @@ C_API int rpmalloc_tls_set(tls_t key, void *val);
             if (rpmalloc_##var##_tls == 0) {            \
                 rpmalloc_##var##_tls = sizeof(type);    \
                 rpmalloc_initialize();                  \
-                    atexit(rpmalloc_atexit);               \
-                if (rpmalloc_tls_create(rpmalloc_##var##_tss, (tls_dtor_t)rp_free) == 0)    \
+                if (rpmalloc_tls_create(&rpmalloc_##var##_tss, rp_free) == 0)    \
                     atexit(var##_delete);               \
                 else                                    \
                     goto err;                           \
             }                                           \
             void *ptr = rpmalloc_tls_get(rpmalloc_##var##_tss); \
             if (ptr == NULL) {                          \
-                ptr = rp_malloc(rpmalloc_##var##_tls);     \
+                ptr = rp_malloc(rpmalloc_##var##_tls);  \
                 if (ptr == NULL)                        \
                     goto err;                           \
                 if ((rpmalloc_tls_set(rpmalloc_##var##_tss, ptr)) != 0)	\
@@ -429,14 +419,16 @@ C_API int rpmalloc_tls_set(tls_t key, void *val);
             if(rpmalloc_##var##_tls != 0) { \
                 rpmalloc_##var##_tls = 0;   \
                 rp_free(rpmalloc_tls_get(rpmalloc_##var##_tss));    \
-                rpmalloc_tls_delete(rpmalloc_##var##_tss);          \
+                rpmalloc_finalize();        \
+                rpmalloc_tls_delete(rpmalloc_##var##_tss);   \
+                rpmalloc_##var##_tss = 0;   \
             }                               \
         }
 
 /* Initialize and setup thread local storage `var` name as functions. */
 #define thread_storage(type, var)           \
         int rpmalloc_##var##_tls = 0;       \
-        tls_t rpmalloc_##var##_tss = {0};   \
+        tls_t rpmalloc_##var##_tss = 0;     \
         thread_storage_delete(type, var)    \
         thread_storage_get(type, var)
 
