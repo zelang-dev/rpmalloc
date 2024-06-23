@@ -1,11 +1,11 @@
-name: Windows & Linux & macOS
+name: Windows & Ubuntu & Apple macOS
 on:
   pull_request:
     branches: [ main ]
   workflow_dispatch:
 
 jobs:
-  build:
+  build-ubuntu:
     name: Linux ${{ matrix.target }}
     runs-on: ubuntu-latest
     strategy:
