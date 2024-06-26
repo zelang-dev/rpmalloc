@@ -2,13 +2,13 @@ cmake_minimum_required(VERSION 2.8...3.14)
 
 project(
     rpmalloc
-    VERSION 1.4.6
+    VERSION 2.0.0
     DESCRIPTION "General Purpose Memory Allocator"
     HOMEPAGE_URL "https://github.com/zelang-dev/rpmalloc"
     LANGUAGES C
 )
 
-set(C_STANDARD 89)
+set(CMAKE_C_STANDARD 90)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
@@ -29,8 +29,7 @@ if(WIN32)
 endif()
 
 set(CMAKE_CONFIGURATION_TYPES=Debug;Release)
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/built")
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/built")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/build")
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/built")
 
 cmake_dependent_option(BUILD_TESTING

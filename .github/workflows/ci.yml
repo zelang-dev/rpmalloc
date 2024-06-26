@@ -31,7 +31,7 @@ jobs:
             cmake --build .
       - name: Run test
         run: |
-            cd built
+            cd build
             ./main_test
             ./storage_test
 
@@ -56,7 +56,7 @@ jobs:
       - name: Run test
         shell: cmd
         run: |
-            cd built\Debug
+            cd build\Debug
             .\main_test.exe
             .\storage_test.exe
 
@@ -76,6 +76,6 @@ jobs:
             cmake --build .
       - name: Run test examples
         run: |
-            cd built
+            cd build
             ./main_test
             ./storage_test

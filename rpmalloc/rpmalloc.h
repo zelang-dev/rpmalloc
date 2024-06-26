@@ -453,6 +453,35 @@ C_API int rpmalloc_tls_set(tls_t key, void *val);
 #undef realloc
 #undef free
 
+#ifndef FORCEINLINE
+  #undef inline
+  #define inline
+  #if defined(_MSC_VER) && !defined(__clang__)
+    #define FORCEINLINE __forceinline
+    #define _Static_assert
+  #elif defined(__GNUC__)
+    #if defined(__STRICT_ANSI__)
+      #define FORCEINLINE __inline__
+    #else
+      #define FORCEINLINE inline
+    #endif
+  #elif defined(__BORLANDC__) || defined(__DMC__) || defined(__SC__) || defined(__WATCOMC__) || defined(__LCC__) ||  defined(__DECC)
+    #define FORCEINLINE __inline
+  #else /* No inline support. */
+    #define FORCEINLINE
+  #endif
+#endif
+
+#ifndef NO_INLINE
+  #ifdef __GNUC__
+    #define C11_NO_INLINE __attribute__((noinline))
+  #elif defined(_MSC_VER)
+    #define NO_INLINE __declspec(noinline)
+  #else
+    #define NO_INLINE
+  #endif
+#endif
+
 C_API void *RPMALLOC_CDECL rp_malloc(size_t size);
 C_API void *RPMALLOC_CDECL rp_calloc(size_t count, size_t size);
 C_API void *RPMALLOC_CDECL rp_realloc(void *ptr, size_t size);

@@ -65,7 +65,7 @@ test_alloc(void) {
 	void* addr[8142];
 	char data[20000];
 	unsigned int datasize[7] = { 473, 39, 195, 24, 73, 376, 245 };
-	size_t wanted_usable_size;
+    size_t wanted_usable_size, ibyte;
 
 	rpmalloc_initialize();
 
@@ -180,13 +180,13 @@ test_alloc(void) {
 			char* baseptr = rpaligned_alloc(this_alignment, size);
 			if (this_alignment && ((uintptr_t)baseptr & (this_alignment - 1)))
 				return test_fail("Alignment failed");
-			for (size_t ibyte = 0; ibyte < size; ++ibyte)
+			for (ibyte = 0; ibyte < size; ++ibyte)
 				baseptr[ibyte] = (char)(ibyte & 0xFF);
 
 			size_t resize = (iloop * ipass + datasize[(iloop + ipass) % 7]) & 0x2FF;
 			size_t capsize = (size > resize ? resize : size);
 			baseptr = rprealloc(baseptr, resize);
-			for (size_t ibyte = 0; ibyte < capsize; ++ibyte) {
+			for (ibyte = 0; ibyte < capsize; ++ibyte) {
 				if (baseptr[ibyte] != (char)(ibyte & 0xFF))
 					return test_fail("Data not preserved on realloc");
 			}
@@ -195,7 +195,7 @@ test_alloc(void) {
 			this_alignment = alignment[(ipass + 1) % 5];
 			capsize = (capsize > alignsize ? alignsize : capsize);
 			baseptr = rpaligned_realloc(baseptr, this_alignment, alignsize, resize, 0);
-			for (size_t ibyte = 0; ibyte < capsize; ++ibyte) {
+			for (ibyte = 0; ibyte < capsize; ++ibyte) {
 				if (baseptr[ibyte] != (char)(ibyte & 0xFF))
 					return test_fail("Data not preserved on realloc");
 			}
@@ -377,16 +377,16 @@ test_realloc(void) {
 	memset(pointers, 0, sizeof(void*) * pointer_count);
 
 	size_t alignments[5] = {0, 16, 32, 64, 128};
-
-	for (size_t iloop = 0; iloop < 8000; ++iloop) {
-		for (size_t iptr = 0; iptr < pointer_count; ++iptr) {
+    size_t iloop, iptr;
+	for (iloop = 0; iloop < 8000; ++iloop) {
+		for (iptr = 0; iptr < pointer_count; ++iptr) {
 			if (iloop)
 				rpfree(rprealloc(pointers[iptr], (size_t)rand() % 4096));
 			pointers[iptr] = rpaligned_alloc(alignments[(iptr + iloop) % 5], iloop + iptr);
 		}
 	}
 
-	for (size_t iptr = 0; iptr < pointer_count; ++iptr)
+	for (iptr = 0; iptr < pointer_count; ++iptr)
 		rpfree(pointers[iptr]);
 	rpfree(pointers);
 
@@ -416,13 +416,13 @@ test_superalign(void) {
 
 	size_t alignment[] = { 2048, 4096, 8192, 16384, 32768 };
 	size_t sizes[] = { 187, 1057, 2436, 5234, 9235, 17984, 35783, 72436 };
-
-	for (size_t ipass = 0; ipass < 8; ++ipass) {
-		for (size_t iloop = 0; iloop < 4096; ++iloop) {
-			for (size_t ialign = 0, asize = sizeof(alignment) / sizeof(alignment[0]); ialign < asize; ++ialign) {
+    size_t asize, ssize, isize, ipass, iloop, ialign;
+	for (ipass = 0; ipass < 8; ++ipass) {
+		for (iloop = 0; iloop < 4096; ++iloop) {
+			for (ialign = 0, asize = sizeof(alignment) / sizeof(alignment[0]); ialign < asize; ++ialign) {
 				if (alignment[ialign] >= rpmalloc_config()->span_size)
 					continue;
-				for (size_t isize = 0, ssize = sizeof(sizes) / sizeof(sizes[0]); isize < ssize; ++isize) {
+				for (isize = 0, ssize = sizeof(sizes) / sizeof(sizes[0]); isize < ssize; ++isize) {
 					size_t alloc_size = sizes[isize] + iloop + ipass;
 					uint8_t* ptr = rpaligned_alloc(alignment[ialign], alloc_size);
 					if (!ptr || ((uintptr_t)ptr & (alignment[ialign] - 1)))
@@ -886,7 +886,9 @@ static int
 test_crossthread(void) {
 	uintptr_t thread[32];
 	allocator_thread_arg_t arg[32];
-	thread_arg targ[32];
+    thread_arg targ[32];
+    unsigned int ithread;
+    int iloop;
 
 	rpmalloc_initialize();
 
@@ -896,7 +898,7 @@ test_crossthread(void) {
 	if (num_alloc_threads > 16)
 		num_alloc_threads = 16;
 
-	for (unsigned int ithread = 0; ithread < num_alloc_threads; ++ithread) {
+	for (ithread = 0; ithread < num_alloc_threads; ++ithread) {
 		unsigned int iadd = (ithread * (16 + ithread) + ithread) % 128;
 #if defined(__LLP64__) || defined(__LP64__) || defined(_WIN64)
 		arg[ithread].loops = 50;
@@ -929,23 +931,23 @@ test_crossthread(void) {
 		targ[ithread].arg = &arg[ithread];
 	}
 
-	for (unsigned int ithread = 0; ithread < num_alloc_threads; ++ithread) {
+	for (ithread = 0; ithread < num_alloc_threads; ++ithread) {
 		arg[ithread].crossthread_pointers = arg[(ithread + 1) % num_alloc_threads].pointers;
 	}
 
-	for (int iloop = 0; iloop < 32; ++iloop) {
-		for (unsigned int ithread = 0; ithread < num_alloc_threads; ++ithread)
+	for (iloop = 0; iloop < 32; ++iloop) {
+		for (ithread = 0; ithread < num_alloc_threads; ++ithread)
 			thread[ithread] = thread_run(&targ[ithread]);
 
 		thread_sleep(100);
 
-		for (unsigned int ithread = 0; ithread < num_alloc_threads; ++ithread) {
+		for (ithread = 0; ithread < num_alloc_threads; ++ithread) {
 			if (thread_join(thread[ithread]) != 0)
 				return -1;
 		}
 	}
 
-	for (unsigned int ithread = 0; ithread < num_alloc_threads; ++ithread)
+	for (ithread = 0; ithread < num_alloc_threads; ++ithread)
 		rpfree(arg[ithread].pointers);
 
 	printf("Memory cross thread free tests passed\n");
@@ -1259,6 +1261,7 @@ static int thread_test_local_storage(void *aArg) {
 int test_thread_storage(void) {
     intptr_t thread[THREAD_COUNT];
     thread_arg targ[THREAD_COUNT];
+    int i;
     if (rpmalloc_gLocalVar_tls != 0)
         return test_fail("thread_local_create macro test failed\n");
 
@@ -1271,7 +1274,7 @@ int test_thread_storage(void) {
     if (*gLocalVar() != 1)
         return test_fail("thread_local_get macro test failed\n");
 
-    for (int i = 0; i < THREAD_COUNT; ++i) {
+    for (i = 0; i < THREAD_COUNT; ++i) {
         int *n = malloc(sizeof * n);  // Holds a thread serial number
         if (!n)
             return test_fail("malloc failed");
@@ -1283,7 +1286,7 @@ int test_thread_storage(void) {
         thread[i] = thread_run(&targ[i]);
     }
 
-    for (int i = 0; i < THREAD_COUNT; i++) {
+    for (i = 0; i < THREAD_COUNT; i++) {
         thread_join(thread[i]);
     }
 
@@ -1360,7 +1363,8 @@ test_initialize(void) {
 #include <sched.h>
 static void
 test_initialize(void) {
-	cpu_set_t prevmask, testmask;
+    rpmalloc_linker_reference();
+    cpu_set_t prevmask, testmask;
 	CPU_ZERO(&prevmask);
 	CPU_ZERO(&testmask);
 	sched_getaffinity(0, sizeof(prevmask), &prevmask);     //Get current mask

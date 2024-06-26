@@ -26,6 +26,6 @@ jobs:
             cmake --build .
       - name: Run tests
         run: |
-            cd built
+            cd build
             ./main_test
             ./storage_test

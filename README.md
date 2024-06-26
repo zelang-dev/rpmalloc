@@ -1,7 +1,12 @@
 # rpmalloc - General Purpose Memory Allocator
+
+**This is a fork at version 2.0.0, it's C89/90 focus, no `thread_local` dependency, no C11, nor C++ features, all removed! see [CHANGELOG](CHANGELOG)**
+
+---
+
 This library provides a public domain cross platform lock free thread caching 16-byte aligned memory allocator implemented in C. The latest source code is always available at https://github.com/mjansson/rpmalloc
 
-Created by Mattias Jansson ([@maniccoder](https://twitter.com/maniccoder)) - Discord server for discussions at https://discord.gg/M8BwTQrt6c 
+Created by Mattias Jansson ([@maniccoder](https://twitter.com/maniccoder)) - Discord server for discussions at https://discord.gg/M8BwTQrt6c
 
 Platforms currently supported:
 

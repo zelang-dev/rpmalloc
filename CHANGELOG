@@ -1,3 +1,13 @@
+2.0.0
+
+- Fixes for building under riscv64, s390x, and ppc64le cpu's, and Tiny C Compiler
+- Removed `malloc.c`, `rpnew.c` and most other `C11` and `C++` features
+- Restructured to fix `loop initial declarations are only allowed in C99` error in building C90 standard only
+- Restructured and added internal common functions for explicit `thread local storage` with
+thread specific functions to handle the removed `thread_local` dependency, and the basics for
+the added `thread_storage(type, variable)` macro
+- Added `cmake` CMakeLists.txt build and GitHub Actions CI
+
 1.4.5
 
 Fix for issue where span cache was not properly freed on heap free all

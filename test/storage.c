@@ -122,6 +122,7 @@ static int thread_test_local_storage(void *aArg) {
 int test_thread_storage(void) {
     intptr_t thread[THREAD_COUNT];
     thread_arg targ[THREAD_COUNT];
+    int i;
     if (rpmalloc_gLocalVar_tls != 0)
         return test_fail("thread_local_create macro test failed\n");
 
@@ -134,7 +135,7 @@ int test_thread_storage(void) {
     if (*gLocalVar() != 1)
         return test_fail("thread_local_get macro test failed\n");
 
-    for (int i = 0; i < THREAD_COUNT; ++i) {
+    for (i = 0; i < THREAD_COUNT; ++i) {
         int *n = malloc(sizeof * n);  // Holds a thread serial number
         if (!n)
             return test_fail("malloc failed");
@@ -146,7 +147,7 @@ int test_thread_storage(void) {
         thread[i] = thread_run(&targ[i]);
     }
 
-    for (int i = 0; i < THREAD_COUNT; i++) {
+    for (i = 0; i < THREAD_COUNT; i++) {
         thread_join(thread[i]);
     }
 
