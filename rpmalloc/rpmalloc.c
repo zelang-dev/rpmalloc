@@ -335,6 +335,11 @@ FORCEINLINE void *rpmalloc_tls_get(tls_t key) {
 FORCEINLINE int rpmalloc_tls_set(tls_t key, void *val) {
     return TlsSetValue(key, val) ? 0 : -1;
 }
+
+void rpmalloc_shutdown(void) {
+    if (!rpmalloc_is_thread_initialized())
+        rpmalloc_finalize();
+}
 #else
 
 int rpmalloc_tls_create(tls_t *key, tls_dtor_t dtor) {
@@ -354,6 +359,11 @@ FORCEINLINE void *rpmalloc_tls_get(tls_t key) {
 
 FORCEINLINE int rpmalloc_tls_set(tls_t key, void *val) {
     return FlsSetValue(key, val) ? 0 : -1;
+}
+
+FORCEINLINE void rpmalloc_shutdown(void) {
+    if (rpmalloc_is_thread_initialized())
+        rpmalloc_finalize();
 }
 #endif
 
@@ -399,6 +409,11 @@ FORCEINLINE void *rpmalloc_tls_get(tls_t key) {
 
 FORCEINLINE int rpmalloc_tls_set(tls_t key, void *val) {
     return (pthread_setspecific(key, val) == 0) ? 0 : -1;
+}
+
+void rpmalloc_shutdown(void) {
+    if (!rpmalloc_is_thread_initialized())
+        rpmalloc_finalize();
 }
 #endif
 

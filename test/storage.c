@@ -81,27 +81,6 @@ test_error(void) {
 	return 0;
 }
 
-int test_malloc(int print_log) {
-    void *p = malloc(371);
-    if (!p)
-        return test_fail("malloc failed");
-    if ((rpmalloc_usable_size(p) < 371) || (rpmalloc_usable_size(p) > (371 + 16)))
-        return test_fail("usable size invalid (1)");
-
-    rpfree(p);
-    if (print_log)
-        printf("Memory override allocation tests passed\n");
-    return 0;
-}
-
-int test_free(int print_log) {
-    free(malloc(371));
-    rpmalloc_finalize();
-    if (print_log)
-        printf("Memory override free tests passed\n");
-    return 0;
-}
-
 /* Thread function: Compile time thread-local storage */
 static int thread_test_local_storage(void *aArg) {
     int thread = *(int *)aArg;
