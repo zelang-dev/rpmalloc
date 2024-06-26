@@ -324,7 +324,7 @@ int rpmalloc_tls_create(tls_t *key, tls_dtor_t dtor) {
     return (*key != 0xFFFFFFFF) ? 0 : -1;
 }
 
-FORCEINLINE rpmalloc_tls_delete(tls_t key) {
+FORCEINLINE void rpmalloc_tls_delete(tls_t key) {
     TlsFree(key);
 }
 
@@ -1493,8 +1493,11 @@ _rpmalloc_span_finalize(heap_t* heap, size_t iclass, span_t* span, span_t** list
 		heap->size_class[iclass].free_list = 0;
 		span->used_count -= free_count;
 	}
-	//If this assert triggers you have memory leaks
-	rpmalloc_assert(span->list_size == span->used_count, "Memory leak detected");
+    //If this assert triggers you have memory leaks
+#if defined(ENABLE_ASSERTS)
+    printf("memory freed: %d, memory used: %d\n", span->list_size, span->used_count);
+#endif
+    rpmalloc_assert(span->list_size == span->used_count, "Memory leak detected");
 	if (span->list_size == span->used_count) {
 		_rpmalloc_stat_dec(&heap->span_use[0].current);
 		_rpmalloc_stat_dec(&heap->size_class_use[iclass].spans_current);
