@@ -9,7 +9,6 @@
  *
  */
 
-#include "rpmalloc.h"
 
 ////////////
 ///
@@ -184,6 +183,7 @@
 #  endif
 #endif
 
+#include "rpmalloc.h"
 #include <stdint.h>
 #include <string.h>
 #include <errno.h>
@@ -2695,9 +2695,6 @@ _rpmalloc_deallocate(void* p) {
 ///
 //////
 
-static size_t
-_rpmalloc_usable_size(void* p);
-
 //! Reallocate the given block to the given size
 static void*
 _rpmalloc_reallocate(heap_t* heap, void* p, size_t size, size_t oldsize, unsigned int flags) {
@@ -2781,7 +2778,7 @@ _rpmalloc_aligned_reallocate(heap_t* heap, void* ptr, size_t alignment, size_t s
 		return _rpmalloc_reallocate(heap, ptr, size, oldsize, flags);
 
 	int no_alloc = !!(flags & RPMALLOC_GROW_OR_FAIL);
-	size_t usablesize = (ptr ? _rpmalloc_usable_size(ptr) : 0);
+	size_t usablesize = rpmalloc_usable_size(ptr);
 	if ((usablesize >= size) && !((uintptr_t)ptr & (alignment - 1))) {
 		if (no_alloc || (size >= (usablesize / 2)))
 			return ptr;
@@ -2805,26 +2802,6 @@ _rpmalloc_aligned_reallocate(heap_t* heap, void* ptr, size_t alignment, size_t s
 /// Initialization, finalization and utility
 ///
 //////
-
-//! Get the usable size of the given block
-static size_t
-_rpmalloc_usable_size(void* p) {
-	//Grab the span using guaranteed span alignment
-	span_t* span = (span_t*)((uintptr_t)p & _memory_span_mask);
-	if (span->size_class < SIZE_CLASS_COUNT) {
-		//Small/medium block
-		void* blocks_start = pointer_offset(span, SPAN_HEADER_SIZE);
-		return span->block_size - ((size_t)pointer_diff(p, blocks_start) % span->block_size);
-	}
-	if (span->size_class == SIZE_CLASS_LARGE) {
-		//Large block
-		size_t current_spans = span->span_count;
-		return (current_spans * _memory_span_size) - (size_t)pointer_diff(p, span);
-	}
-	//Oversized block, page count is stored in span_count
-	size_t current_pages = span->span_count;
-	return (current_pages * _memory_page_size) - (size_t)pointer_diff(p, span);
-}
 
 //! Adjust and optimize the size class properties for the given class
 static void
@@ -2850,7 +2827,7 @@ _rpmalloc_adjust_size_class(size_t iclass) {
 }
 
 //! Initialize the allocator and setup global data
-extern inline int
+extern int
 rpmalloc_initialize(void) {
 	if (_rpmalloc_initialized) {
 		rpmalloc_thread_initialize();
@@ -3142,8 +3119,7 @@ rpmalloc_finalize(void) {
 }
 
 //! Initialize thread, assign heap
-extern inline void
-rpmalloc_thread_initialize(void) {
+extern void rpmalloc_thread_initialize(void) {
 	if (!get_thread_heap_raw()) {
 		heap_t* heap = _rpmalloc_heap_allocate(0);
 		if (heap) {
@@ -3157,8 +3133,7 @@ rpmalloc_thread_initialize(void) {
 }
 
 //! Finalize thread, orphan heap
-void
-rpmalloc_thread_finalize(int release_caches) {
+void rpmalloc_thread_finalize(int release_caches) {
 	heap_t* heap = get_thread_heap_raw();
 	if (heap)
 		_rpmalloc_heap_release_raw(heap, release_caches);
@@ -3168,8 +3143,7 @@ rpmalloc_thread_finalize(int release_caches) {
 #endif
 }
 
-int
-rpmalloc_is_thread_initialized(void) {
+int rpmalloc_is_thread_initialized(void) {
 	return (get_thread_heap_raw() != 0) ? 1 : 0;
 }
 
@@ -3180,7 +3154,7 @@ rpmalloc_config(void) {
 
 // Extern interface
 
-extern inline RPMALLOC_ALLOCATOR void*
+extern RPMALLOC_ALLOCATOR void*
 rpmalloc(size_t size) {
 #if ENABLE_VALIDATE_ARGS
 	if (size >= MAX_ALLOC_SIZE) {
@@ -3192,12 +3166,11 @@ rpmalloc(size_t size) {
 	return _rpmalloc_allocate(heap, size);
 }
 
-extern inline void
-rpfree(void* ptr) {
+extern void rpfree(void* ptr) {
 	_rpmalloc_deallocate(ptr);
 }
 
-extern inline RPMALLOC_ALLOCATOR void*
+extern RPMALLOC_ALLOCATOR void*
 rpcalloc(size_t num, size_t size) {
 	size_t total;
 #if ENABLE_VALIDATE_ARGS
@@ -3224,8 +3197,7 @@ rpcalloc(size_t num, size_t size) {
 	return block;
 }
 
-extern inline RPMALLOC_ALLOCATOR void*
-rprealloc(void* ptr, size_t size) {
+extern RPMALLOC_ALLOCATOR void* rprealloc(void* ptr, size_t size) {
 #if ENABLE_VALIDATE_ARGS
 	if (size >= MAX_ALLOC_SIZE) {
 		errno = EINVAL;
@@ -3295,9 +3267,29 @@ rpposix_memalign(void **memptr, size_t alignment, size_t size) {
 	return *memptr ? 0 : ENOMEM;
 }
 
-extern inline size_t
-rpmalloc_usable_size(void* ptr) {
-	return (ptr ? _rpmalloc_usable_size(ptr) : 0);
+extern size_t rpmalloc_usable_size(void *ptr) {
+    if (ptr) {
+        //Grab the span using guaranteed span alignment
+        span_t *span = (span_t *)((uintptr_t)ptr & _memory_span_mask);
+        size_t usable = 0;
+        if (span->size_class < SIZE_CLASS_COUNT) {
+            //Small/medium block
+            void *blocks_start = pointer_offset(span, SPAN_HEADER_SIZE);
+            usable = span->block_size - ((size_t)pointer_diff(ptr, blocks_start) % span->block_size);
+        } else if (span->size_class == SIZE_CLASS_LARGE) {
+            //Large block
+            size_t current_spans = span->span_count;
+            usable = (current_spans * _memory_span_size) - (size_t)pointer_diff(ptr, span);
+        } else {
+            //Oversized block, page count is stored in span_count
+            size_t current_pages = span->span_count;
+            usable = (current_pages * _memory_page_size) - (size_t)pointer_diff(ptr, span);
+        }
+
+        return usable;
+    }
+
+    return 0;
 }
 
 extern inline void
@@ -3458,8 +3450,7 @@ _memory_heap_dump_statistics(heap_t* heap, void* file) {
 
 #endif
 
-void
-rpmalloc_dump_statistics(void* file) {
+void rpmalloc_dump_statistics(void* file) {
 #if ENABLE_STATISTICS
     size_t list_idx, iclass;
     for (list_idx = 0; list_idx < HEAP_ARRAY_SIZE; ++list_idx) {
