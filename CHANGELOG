@@ -7,6 +7,7 @@
 thread specific functions to handle the removed `thread_local` dependency, and the basics for
 the added `thread_storage(type, variable)` macro
 - Added `cmake` CMakeLists.txt build and GitHub Actions CI
+- Removed `RPMALLOC_FIRST_CLASS_HEAPS` options and routines
 
 1.4.5
 
