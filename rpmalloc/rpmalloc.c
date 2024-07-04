@@ -365,11 +365,6 @@ FORCEINLINE void *rpmalloc_tls_get(tls_t key) {
 FORCEINLINE int rpmalloc_tls_set(tls_t key, void *val) {
     return FlsSetValue(key, val) ? 0 : -1;
 }
-
-FORCEINLINE void rpmalloc_shutdown(void) {
-    if (rpmalloc_is_thread_initialized())
-        rpmalloc_finalize();
-}
 #endif
 
 #else
@@ -414,11 +409,6 @@ FORCEINLINE void *rpmalloc_tls_get(tls_t key) {
 
 FORCEINLINE int rpmalloc_tls_set(tls_t key, void *val) {
     return (pthread_setspecific(key, val) == 0) ? 0 : -1;
-}
-
-void rpmalloc_shutdown(void) {
-    if (!rpmalloc_is_thread_initialized())
-        rpmalloc_finalize();
 }
 #endif
 
@@ -3455,6 +3445,7 @@ void rpmalloc_dump_statistics(void* file) {
 static void rp_override_init(void) {
     if (!_rpmalloc_initialized) {
         rpmalloc_initialize();
+        atexit(rpmalloc_finalize);
     } else if (!rpmalloc_is_thread_initialized()) {
         rpmalloc_thread_initialize();
     }

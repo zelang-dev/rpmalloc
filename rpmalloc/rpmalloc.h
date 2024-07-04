@@ -307,16 +307,15 @@ typedef void(__stdcall *tls_dtor_t)(PVOID lpFlsData);
 #endif
 #else
 #include <pthread.h>
-#include <stdlib.h>
 typedef pthread_key_t tls_t;
 typedef void (*tls_dtor_t)(void *);
 #endif
+#include <stdlib.h>
 
 C_API int rpmalloc_tls_create(tls_t *key, tls_dtor_t dtor);
 C_API void rpmalloc_tls_delete(tls_t key);
 C_API void *rpmalloc_tls_get(tls_t key);
 C_API int rpmalloc_tls_set(tls_t key, void *val);
-C_API void rpmalloc_shutdown(void);
 
 #ifndef thread_storage
 #define thread_storage_get(type, var)                   \
@@ -324,6 +323,7 @@ C_API void rpmalloc_shutdown(void);
             if (rpmalloc_##var##_tls == 0) {            \
                 rpmalloc_##var##_tls = sizeof(type);    \
                 rpmalloc_initialize();                  \
+                atexit(rpmalloc_finalize);              \
                 if (rpmalloc_tls_create(&rpmalloc_##var##_tss, (tls_dtor_t)rp_free) == 0)    \
                     atexit(var##_delete);               \
                 else                                    \
@@ -349,7 +349,6 @@ C_API void rpmalloc_shutdown(void);
                 rp_free(rpmalloc_tls_get(rpmalloc_##var##_tss));    \
                 rpmalloc_tls_delete(rpmalloc_##var##_tss);   \
                 rpmalloc_##var##_tss = 0;   \
-                rpmalloc_shutdown();        \
             }                               \
         }
 
