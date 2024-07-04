@@ -318,6 +318,15 @@ C_API void *rpmalloc_tls_get(tls_t key);
 C_API int rpmalloc_tls_set(tls_t key, void *val);
 
 #ifndef thread_storage
+#ifdef _WIN32
+#   define thread_storage_shutdown              \
+        if (rpmalloc_is_thread_initialized())   \
+            rpmalloc_finalize();
+#else
+#   define thread_storage_shutdown              \
+        if (!rpmalloc_is_thread_initialized())  \
+            rpmalloc_finalize();
+#endif
 #define thread_storage_get(type, var)                   \
         type* var(void) {                               \
             if (rpmalloc_##var##_tls == 0) {            \
@@ -349,6 +358,7 @@ C_API int rpmalloc_tls_set(tls_t key, void *val);
                 rp_free(rpmalloc_tls_get(rpmalloc_##var##_tss));    \
                 rpmalloc_tls_delete(rpmalloc_##var##_tss);   \
                 rpmalloc_##var##_tss = 0;   \
+                thread_storage_shutdown     \
             }                               \
         }
 

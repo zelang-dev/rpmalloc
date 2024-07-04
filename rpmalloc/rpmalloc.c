@@ -253,26 +253,34 @@ static tls_t _memory_thread_heap = 0;
 //! Initialized flag
 static int _rpmalloc_initialized = 0;
 
+#include "c89atomic.h"
+
+#ifdef _WIN32
+typedef volatile c89atomic_uint32 atomic32_t;
+typedef volatile c89atomic_uint64 atomic64_t;
+typedef volatile void *atomicptr_t;
+#else
+typedef volatile _Atomic(c89atomic_uint32)atomic32_t;
+typedef volatile _Atomic(c89atomic_uint64)atomic64_t;
+typedef volatile _Atomic(void *)atomicptr_t;
+#endif
+
+static FORCEINLINE int32_t atomic_load32(atomic32_t * src) { return c89atomic_load_explicit_32(src, memory_order_relaxed); }
+static FORCEINLINE void atomic_store32(atomic32_t * dst, int32_t val) { c89atomic_store_explicit_32(dst, val, memory_order_relaxed); }
+static FORCEINLINE int32_t atomic_incr32(atomic32_t * val) { return c89atomic_fetch_add_explicit_32(val, 1, memory_order_relaxed) + 1; }
+static FORCEINLINE int32_t atomic_decr32(atomic32_t * val) { return c89atomic_fetch_add_explicit_32(val, -1, memory_order_relaxed) - 1; }
+static FORCEINLINE int32_t atomic_add32(atomic32_t * val, int32_t add) { return c89atomic_fetch_add_explicit_32(val, add, memory_order_relaxed) + add; }
+static FORCEINLINE int atomic_cas32_acquire(atomic32_t * dst, int32_t val, int32_t ref) { return c89atomic_compare_exchange_weak_explicit_32(dst, &ref, val, memory_order_acquire, memory_order_relaxed); }
+static FORCEINLINE void atomic_store32_release(atomic32_t * dst, int32_t val) { c89atomic_store_explicit_32(dst, val, memory_order_release); }
+static FORCEINLINE int64_t atomic_load64(atomic64_t * val) { return c89atomic_load_explicit_64(val, memory_order_relaxed); }
+static FORCEINLINE int64_t atomic_add64(atomic64_t * val, int64_t add) { return c89atomic_fetch_add_explicit_64(val, add, memory_order_relaxed) + add; }
+static FORCEINLINE void *atomic_load_ptr(atomicptr_t *src) { return (void *)c89atomic_load_explicit_64((c89atomic_uint64 *)src, memory_order_relaxed); }
+static FORCEINLINE void atomic_store_ptr(atomicptr_t *dst, void *val) { c89atomic_store_explicit_64((c89atomic_uint64 *)dst, (c89atomic_uint64)val, memory_order_relaxed); }
+static FORCEINLINE void atomic_store_ptr_release(atomicptr_t *dst, void *val) { c89atomic_store_explicit_64((c89atomic_uint64 *)dst, (c89atomic_uint64)val, memory_order_release); }
+static FORCEINLINE void *atomic_exchange_ptr_acquire(atomicptr_t *dst, void *val) { return (void *)c89atomic_exchange_explicit_64((c89atomic_uint64 *)dst, (c89atomic_uint64)val, memory_order_acquire); }
+static FORCEINLINE int atomic_cas_ptr(atomicptr_t *dst, void *val, void *ref) { return c89atomic_compare_exchange_weak_explicit_64((c89atomic_uint64 *)dst, (c89atomic_uint64 *)&ref, (c89atomic_uint64)val, memory_order_relaxed, memory_order_relaxed); }
+
 #if defined(_MSC_VER) && !defined(__clang__)
-
-typedef volatile long      atomic32_t;
-typedef volatile long long atomic64_t;
-typedef volatile void*     atomicptr_t;
-
-static FORCEINLINE int32_t atomic_load32(atomic32_t* src) { return *src; }
-static FORCEINLINE void    atomic_store32(atomic32_t* dst, int32_t val) { *dst = val; }
-static FORCEINLINE int32_t atomic_incr32(atomic32_t* val) { return (int32_t)InterlockedIncrement(val); }
-static FORCEINLINE int32_t atomic_decr32(atomic32_t* val) { return (int32_t)InterlockedDecrement(val); }
-static FORCEINLINE int32_t atomic_add32(atomic32_t* val, int32_t add) { return (int32_t)InterlockedExchangeAdd(val, add) + add; }
-static FORCEINLINE int     atomic_cas32_acquire(atomic32_t* dst, int32_t val, int32_t ref) { return (InterlockedCompareExchange(dst, val, ref) == ref) ? 1 : 0; }
-static FORCEINLINE void    atomic_store32_release(atomic32_t* dst, int32_t val) { *dst = val; }
-static FORCEINLINE int64_t atomic_load64(atomic64_t* src) { return *src; }
-static FORCEINLINE int64_t atomic_add64(atomic64_t* val, int64_t add) { return (int64_t)InterlockedExchangeAdd64(val, add) + add; }
-static FORCEINLINE void*   atomic_load_ptr(atomicptr_t* src) { return (void*)*src; }
-static FORCEINLINE void    atomic_store_ptr(atomicptr_t* dst, void* val) { *dst = val; }
-static FORCEINLINE void    atomic_store_ptr_release(atomicptr_t* dst, void* val) { *dst = val; }
-static FORCEINLINE void*   atomic_exchange_ptr_acquire(atomicptr_t* dst, void* val) { return (void*)InterlockedExchangePointer((void* volatile*)dst, val); }
-static FORCEINLINE int     atomic_cas_ptr(atomicptr_t* dst, void* val, void* ref) { return (InterlockedCompareExchangePointer((void* volatile*)dst, val, ref) == ref) ? 1 : 0; }
 
 #define EXPECTED(x) (x)
 #define UNEXPECTED(x) (x)
@@ -336,15 +344,6 @@ FORCEINLINE void *rpmalloc_tls_get(tls_t key) {
 FORCEINLINE int rpmalloc_tls_set(tls_t key, void *val) {
     return TlsSetValue(key, val) ? 0 : -1;
 }
-
-void rpmalloc_shutdown(void) {
-    rp_free(rpmalloc_tls_get(_memory_thread_heap));
-    TlsFree(_memory_thread_heap);
-    rp_free(rpmalloc_tls_get(fls_key));
-    FlsFree(fls_key);
-    if (rpmalloc_is_thread_initialized())
-        rpmalloc_finalize();
-}
 #else
 
 int rpmalloc_tls_create(tls_t *key, tls_dtor_t dtor) {
@@ -368,27 +367,6 @@ FORCEINLINE int rpmalloc_tls_set(tls_t key, void *val) {
 #endif
 
 #else
-
-#include <stdatomic.h>
-
-typedef volatile _Atomic(int32_t) atomic32_t;
-typedef volatile _Atomic(int64_t) atomic64_t;
-typedef volatile _Atomic(void*) atomicptr_t;
-
-static FORCEINLINE int32_t atomic_load32(atomic32_t* src) { return atomic_load_explicit(src, memory_order_relaxed); }
-static FORCEINLINE void    atomic_store32(atomic32_t* dst, int32_t val) { atomic_store_explicit(dst, val, memory_order_relaxed); }
-static FORCEINLINE int32_t atomic_incr32(atomic32_t* val) { return atomic_fetch_add_explicit(val, 1, memory_order_relaxed) + 1; }
-static FORCEINLINE int32_t atomic_decr32(atomic32_t* val) { return atomic_fetch_add_explicit(val, -1, memory_order_relaxed) - 1; }
-static FORCEINLINE int32_t atomic_add32(atomic32_t* val, int32_t add) { return atomic_fetch_add_explicit(val, add, memory_order_relaxed) + add; }
-static FORCEINLINE int     atomic_cas32_acquire(atomic32_t* dst, int32_t val, int32_t ref) { return atomic_compare_exchange_weak_explicit(dst, &ref, val, memory_order_acquire, memory_order_relaxed); }
-static FORCEINLINE void    atomic_store32_release(atomic32_t* dst, int32_t val) { atomic_store_explicit(dst, val, memory_order_release); }
-static FORCEINLINE int64_t atomic_load64(atomic64_t* val) { return atomic_load_explicit(val, memory_order_relaxed); }
-static FORCEINLINE int64_t atomic_add64(atomic64_t* val, int64_t add) { return atomic_fetch_add_explicit(val, add, memory_order_relaxed) + add; }
-static FORCEINLINE void*   atomic_load_ptr(atomicptr_t* src) { return atomic_load_explicit(src, memory_order_relaxed); }
-static FORCEINLINE void    atomic_store_ptr(atomicptr_t* dst, void* val) { atomic_store_explicit(dst, val, memory_order_relaxed); }
-static FORCEINLINE void    atomic_store_ptr_release(atomicptr_t* dst, void* val) { atomic_store_explicit(dst, val, memory_order_release); }
-static FORCEINLINE void*   atomic_exchange_ptr_acquire(atomicptr_t* dst, void* val) { return atomic_exchange_explicit(dst, val, memory_order_acquire); }
-static FORCEINLINE int     atomic_cas_ptr(atomicptr_t* dst, void* val, void* ref) { return atomic_compare_exchange_weak_explicit(dst, &ref, val, memory_order_relaxed, memory_order_relaxed); }
 
 #define EXPECTED(x) __builtin_expect((x), 1)
 #define UNEXPECTED(x) __builtin_expect((x), 0)
