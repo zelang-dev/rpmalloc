@@ -187,136 +187,102 @@ typedef struct rpmalloc_config_t {
 } rpmalloc_config_t;
 
 //! Initialize allocator with default configuration
-RPMALLOC_EXPORT int
-rpmalloc_initialize(void);
+RPMALLOC_EXPORT int rpmalloc_initialize(void);
 
 //! Initialize allocator with given configuration
-RPMALLOC_EXPORT int
-rpmalloc_initialize_config(const rpmalloc_config_t* config);
+RPMALLOC_EXPORT int rpmalloc_initialize_config(const rpmalloc_config_t* config);
 
 //! Get allocator configuration
-RPMALLOC_EXPORT const rpmalloc_config_t*
-rpmalloc_config(void);
+RPMALLOC_EXPORT const rpmalloc_config_t* rpmalloc_config(void);
 
 //! Finalize allocator
-RPMALLOC_EXPORT void
-rpmalloc_finalize(void);
+RPMALLOC_EXPORT void rpmalloc_finalize(void);
 
 //! Initialize allocator for calling thread
-RPMALLOC_EXPORT void
-rpmalloc_thread_initialize(void);
+RPMALLOC_EXPORT void rpmalloc_thread_initialize(void);
 
 //! Finalize allocator for calling thread
-RPMALLOC_EXPORT void
-rpmalloc_thread_finalize(int release_caches);
+RPMALLOC_EXPORT void rpmalloc_thread_finalize(int release_caches);
 
 //! Perform deferred deallocations pending for the calling thread heap
-RPMALLOC_EXPORT void
-rpmalloc_thread_collect(void);
+RPMALLOC_EXPORT void rpmalloc_thread_collect(void);
 
 //! Query if allocator is initialized for calling thread
-RPMALLOC_EXPORT int
-rpmalloc_is_thread_initialized(void);
+RPMALLOC_EXPORT int rpmalloc_is_thread_initialized(void);
 
 //! Get per-thread statistics
-RPMALLOC_EXPORT void
-rpmalloc_thread_statistics(rpmalloc_thread_statistics_t* stats);
+RPMALLOC_EXPORT void rpmalloc_thread_statistics(rpmalloc_thread_statistics_t* stats);
 
 //! Get global statistics
-RPMALLOC_EXPORT void
-rpmalloc_global_statistics(rpmalloc_global_statistics_t* stats);
+RPMALLOC_EXPORT void rpmalloc_global_statistics(rpmalloc_global_statistics_t* stats);
 
 //! Dump all statistics in human readable format to file (should be a FILE*)
-RPMALLOC_EXPORT void
-rpmalloc_dump_statistics(void* file);
+RPMALLOC_EXPORT void rpmalloc_dump_statistics(void* file);
 
 //! Allocate a memory block of at least the given size
-RPMALLOC_EXPORT RPMALLOC_ALLOCATOR void*
-rpmalloc(size_t size) RPMALLOC_ATTRIB_MALLOC RPMALLOC_ATTRIB_ALLOC_SIZE(1);
+RPMALLOC_EXPORT void* rpmalloc(size_t size) RPMALLOC_ATTRIB_MALLOC RPMALLOC_ATTRIB_ALLOC_SIZE(1);
 
 //! Free the given memory block
-RPMALLOC_EXPORT void
-rpfree(void* ptr);
+RPMALLOC_EXPORT void rpfree(void* ptr);
 
 //! Allocate a memory block of at least the given size and zero initialize it
-RPMALLOC_EXPORT RPMALLOC_ALLOCATOR void*
-rpcalloc(size_t num, size_t size) RPMALLOC_ATTRIB_MALLOC RPMALLOC_ATTRIB_ALLOC_SIZE2(1, 2);
+RPMALLOC_EXPORT void* rpcalloc(size_t num, size_t size) RPMALLOC_ATTRIB_MALLOC RPMALLOC_ATTRIB_ALLOC_SIZE2(1, 2);
 
 //! Reallocate the given block to at least the given size
-RPMALLOC_EXPORT RPMALLOC_ALLOCATOR void*
-rprealloc(void* ptr, size_t size) RPMALLOC_ATTRIB_MALLOC RPMALLOC_ATTRIB_ALLOC_SIZE(2);
+RPMALLOC_EXPORT void* rprealloc(void* ptr, size_t size) RPMALLOC_ATTRIB_MALLOC RPMALLOC_ATTRIB_ALLOC_SIZE(2);
 
 //! Reallocate the given block to at least the given size and alignment,
 //  with optional control flags (see RPMALLOC_NO_PRESERVE).
 //  Alignment must be a power of two and a multiple of sizeof(void*),
 //  and should ideally be less than memory page size. A caveat of rpmalloc
 //  internals is that this must also be strictly less than the span size (default 64KiB)
-RPMALLOC_EXPORT RPMALLOC_ALLOCATOR void*
-rpaligned_realloc(void* ptr, size_t alignment, size_t size, size_t oldsize, unsigned int flags) RPMALLOC_ATTRIB_MALLOC RPMALLOC_ATTRIB_ALLOC_SIZE(3);
+RPMALLOC_EXPORT void* rpaligned_realloc(void* ptr, size_t alignment, size_t size, size_t oldsize, unsigned int flags) RPMALLOC_ATTRIB_MALLOC RPMALLOC_ATTRIB_ALLOC_SIZE(3);
 
 //! Allocate a memory block of at least the given size and alignment.
 //  Alignment must be a power of two and a multiple of sizeof(void*),
 //  and should ideally be less than memory page size. A caveat of rpmalloc
 //  internals is that this must also be strictly less than the span size (default 64KiB)
-RPMALLOC_EXPORT RPMALLOC_ALLOCATOR void*
+RPMALLOC_EXPORT void*
 rpaligned_alloc(size_t alignment, size_t size) RPMALLOC_ATTRIB_MALLOC RPMALLOC_ATTRIB_ALLOC_SIZE(2);
 
 //! Allocate a memory block of at least the given size and alignment, and zero initialize it.
 //  Alignment must be a power of two and a multiple of sizeof(void*),
 //  and should ideally be less than memory page size. A caveat of rpmalloc
 //  internals is that this must also be strictly less than the span size (default 64KiB)
-RPMALLOC_EXPORT RPMALLOC_ALLOCATOR void*
-rpaligned_calloc(size_t alignment, size_t num, size_t size) RPMALLOC_ATTRIB_MALLOC RPMALLOC_ATTRIB_ALLOC_SIZE2(2, 3);
+RPMALLOC_EXPORT void* rpaligned_calloc(size_t alignment, size_t num, size_t size) RPMALLOC_ATTRIB_MALLOC RPMALLOC_ATTRIB_ALLOC_SIZE2(2, 3);
 
 //! Allocate a memory block of at least the given size and alignment.
 //  Alignment must be a power of two and a multiple of sizeof(void*),
 //  and should ideally be less than memory page size. A caveat of rpmalloc
 //  internals is that this must also be strictly less than the span size (default 64KiB)
-RPMALLOC_EXPORT RPMALLOC_ALLOCATOR void*
-rpmemalign(size_t alignment, size_t size) RPMALLOC_ATTRIB_MALLOC RPMALLOC_ATTRIB_ALLOC_SIZE(2);
+RPMALLOC_EXPORT void* rpmemalign(size_t alignment, size_t size) RPMALLOC_ATTRIB_MALLOC RPMALLOC_ATTRIB_ALLOC_SIZE(2);
 
 //! Allocate a memory block of at least the given size and alignment.
 //  Alignment must be a power of two and a multiple of sizeof(void*),
 //  and should ideally be less than memory page size. A caveat of rpmalloc
 //  internals is that this must also be strictly less than the span size (default 64KiB)
-RPMALLOC_EXPORT int
-rpposix_memalign(void** memptr, size_t alignment, size_t size);
+RPMALLOC_EXPORT int rpposix_memalign(void** memptr, size_t alignment, size_t size);
 
 //! Query the usable size of the given memory block (from given pointer to the end of block)
-RPMALLOC_EXPORT size_t
-rpmalloc_usable_size(void* ptr);
+RPMALLOC_EXPORT size_t rpmalloc_usable_size(void* ptr);
 
 //! Dummy empty function for forcing linker symbol inclusion
-RPMALLOC_EXPORT void
-rpmalloc_linker_reference(void);
+RPMALLOC_EXPORT void rpmalloc_linker_reference(void);
 
 /* Public API qualifier. */
 #ifndef C_API
 #   define C_API extern
 #endif
 
-#if defined(_WIN32) && defined(_MSC_VER)
-#include <windows.h>
-typedef DWORD tls_t;
-#ifdef _WIN32_PLATFORM_X86
-/* see TLS_MAXIMUM_AVAILABLE */
-#define EMULATED_THREADS_TSS_DTOR_SLOTNUM 1088
-typedef void (*tls_dtor_t)(void *);
+#if defined(_WIN32)
+#   include <windows.h>
+#   include "pthread.h"
 #else
-typedef void(__stdcall *tls_dtor_t)(PVOID lpFlsData);
+#   include <pthread.h>
 #endif
-#else
-#include <pthread.h>
 #include <stdlib.h>
 typedef pthread_key_t tls_t;
 typedef void (*tls_dtor_t)(void *);
-#endif
-
-C_API int rpmalloc_tls_create(tls_t *key, tls_dtor_t dtor);
-C_API void rpmalloc_tls_delete(tls_t key);
-C_API void *rpmalloc_tls_get(tls_t key);
-C_API int rpmalloc_tls_set(tls_t key, void *val);
-C_API void rpmalloc_shutdown(void);
 
 #ifndef thread_storage
 #define thread_storage_get(type, var)                   \
@@ -324,17 +290,18 @@ C_API void rpmalloc_shutdown(void);
             if (rpmalloc_##var##_tls == 0) {            \
                 rpmalloc_##var##_tls = sizeof(type);    \
                 rpmalloc_initialize();                  \
-                if (rpmalloc_tls_create(&rpmalloc_##var##_tss, (tls_dtor_t)rp_free) == 0)    \
+                atexit(rpmalloc_finalize);              \
+                if (pthread_key_create(&rpmalloc_##var##_tss, (tls_dtor_t)rp_free) == 0)    \
                     atexit(var##_delete);               \
                 else                                    \
                     goto err;                           \
             }                                           \
-            void *ptr = rpmalloc_tls_get(rpmalloc_##var##_tss); \
+            void *ptr = pthread_getspecific(rpmalloc_##var##_tss); \
             if (ptr == NULL) {                          \
                 ptr = rp_malloc(rpmalloc_##var##_tls);  \
                 if (ptr == NULL)                        \
                     goto err;                           \
-                if ((rpmalloc_tls_set(rpmalloc_##var##_tss, ptr)) != 0)	\
+                if ((pthread_setspecific(rpmalloc_##var##_tss, ptr)) != 0)	\
                     goto err;                           \
             }                                           \
             return (type *)ptr;                         \
@@ -346,10 +313,10 @@ C_API void rpmalloc_shutdown(void);
         void var##_delete(void) {           \
             if(rpmalloc_##var##_tls != 0) { \
                 rpmalloc_##var##_tls = 0;   \
-                rp_free(rpmalloc_tls_get(rpmalloc_##var##_tss));    \
-                rpmalloc_tls_delete(rpmalloc_##var##_tss);   \
+                rp_free(pthread_getspecific(rpmalloc_##var##_tss));    \
+                pthread_key_delete(rpmalloc_##var##_tss);   \
                 rpmalloc_##var##_tss = 0;   \
-                rpmalloc_shutdown();        \
+                rpmalloc_finalize();        \
             }                               \
         }
 
@@ -382,9 +349,9 @@ C_API void rpmalloc_shutdown(void);
     #define _Static_assert
   #elif defined(__GNUC__)
     #if defined(__STRICT_ANSI__)
-      #define FORCEINLINE __inline__ __attribute__((always_inline))
+      #define FORCEINLINE __inline__
     #else
-      #define FORCEINLINE inline __attribute__((always_inline))
+      #define FORCEINLINE inline
     #endif
   #elif defined(__BORLANDC__) || defined(__DMC__) || defined(__SC__) || defined(__WATCOMC__) || defined(__LCC__) ||  defined(__DECC)
     #define FORCEINLINE __inline
