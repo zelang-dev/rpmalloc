@@ -226,10 +226,6 @@ rpmalloc_thread_statistics(rpmalloc_thread_statistics_t* stats);
 RPMALLOC_EXPORT void
 rpmalloc_global_statistics(rpmalloc_global_statistics_t* stats);
 
-//! Dump all statistics in human readable format to file (should be a FILE*)
-RPMALLOC_EXPORT void
-rpmalloc_dump_statistics(void* file);
-
 //! Allocate a memory block of at least the given size
 RPMALLOC_EXPORT RPMALLOC_ALLOCATOR void*
 rpmalloc(size_t size) RPMALLOC_ATTRIB_MALLOC RPMALLOC_ATTRIB_ALLOC_SIZE(1);
@@ -295,7 +291,17 @@ rpmalloc_linker_reference(void);
 #   define C_API extern
 #endif
 
-#if defined(_WIN32) && defined(_MSC_VER)
+#if defined(__TINYC__) || !defined(_WIN32)
+#if defined(_WIN32)
+#   include <windows.h>
+#   include "pthread.h"
+#else
+#   include <pthread.h>
+#endif
+
+typedef pthread_key_t tls_t;
+typedef void (*tls_dtor_t)(void *);
+#else
 #include <windows.h>
 typedef DWORD tls_t;
 #ifdef _WIN32_PLATFORM_X86
@@ -305,12 +311,9 @@ typedef void (*tls_dtor_t)(void *);
 #else
 typedef void(__stdcall *tls_dtor_t)(PVOID lpFlsData);
 #endif
-#else
-#include <pthread.h>
-typedef pthread_key_t tls_t;
-typedef void (*tls_dtor_t)(void *);
 #endif
 #include <stdlib.h>
+#include "catomic.h"
 
 C_API int rpmalloc_tls_create(tls_t *key, tls_dtor_t dtor);
 C_API void rpmalloc_tls_delete(tls_t key);
@@ -332,7 +335,6 @@ C_API int rpmalloc_tls_set(tls_t key, void *val);
             if (rpmalloc_##var##_tls == 0) {            \
                 rpmalloc_##var##_tls = sizeof(type);    \
                 rpmalloc_initialize();                  \
-                atexit(rpmalloc_finalize);              \
                 if (rpmalloc_tls_create(&rpmalloc_##var##_tss, (tls_dtor_t)rp_free) == 0)    \
                     atexit(var##_delete);               \
                 else                                    \

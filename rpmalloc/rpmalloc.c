@@ -90,10 +90,6 @@
 //! Enable validation of args to public entry points
 #define ENABLE_VALIDATE_ARGS      0
 #endif
-#ifndef ENABLE_STATISTICS
-//! Enable statistics collection
-#define ENABLE_STATISTICS         0
-#endif
 #ifndef ENABLE_ASSERTS
 //! Enable asserts
 #define ENABLE_ASSERTS            0
@@ -161,7 +157,6 @@
 #else
 #  include <unistd.h>
 #  include <stdio.h>
-#  include <stdlib.h>
 #  include <time.h>
 #  if defined(__linux__) || defined(__ANDROID__)
 #    include <sys/prctl.h>
@@ -176,10 +171,6 @@
 #    include <mach/mach_vm.h>
 #    include <mach/vm_statistics.h>
 #    endif
-#    include <pthread.h>
-#  endif
-#  if defined(__HAIKU__) || defined(__TINYC__) || defined(FORCED_SPECIFIC)
-#    include <pthread.h>
 #  endif
 #endif
 
@@ -214,7 +205,7 @@ extern int madvise(caddr_t, size_t, int);
 #endif
 #include <errno.h>
 
-#if defined(ENABLE_ASSERTS) || defined(ENABLE_STATISTICS)
+#if defined(ENABLE_ASSERTS)
 #  include <stdio.h>
 #endif
 
@@ -253,13 +244,15 @@ static tls_t _memory_thread_heap = 0;
 //! Initialized flag
 static int _rpmalloc_initialized = 0;
 
-#include "c89atomic.h"
-
 #ifdef _WIN32
+#define EXPECTED(x) (x)
+#define UNEXPECTED(x) (x)
 typedef volatile c89atomic_uint32 atomic32_t;
 typedef volatile c89atomic_uint64 atomic64_t;
 typedef volatile void *atomicptr_t;
 #else
+#define EXPECTED(x) __builtin_expect((x), 1)
+#define UNEXPECTED(x) __builtin_expect((x), 0)
 typedef volatile _Atomic(c89atomic_uint32)atomic32_t;
 typedef volatile _Atomic(c89atomic_uint64)atomic64_t;
 typedef volatile _Atomic(void *)atomicptr_t;
@@ -280,12 +273,26 @@ static FORCEINLINE void atomic_store_ptr_release(atomicptr_t *dst, void *val) { 
 static FORCEINLINE void *atomic_exchange_ptr_acquire(atomicptr_t *dst, void *val) { return (void *)c89atomic_exchange_explicit_64((c89atomic_uint64 *)dst, (c89atomic_uint64)val, memory_order_acquire); }
 static FORCEINLINE int atomic_cas_ptr(atomicptr_t *dst, void *val, void *ref) { return c89atomic_compare_exchange_weak_explicit_64((c89atomic_uint64 *)dst, (c89atomic_uint64 *)&ref, (c89atomic_uint64)val, memory_order_relaxed, memory_order_relaxed); }
 
-#if defined(_MSC_VER) && !defined(__clang__)
+#if defined(__TINYC__) || !defined(_WIN32)
+int rpmalloc_tls_create(tls_t *key, tls_dtor_t dtor) {
+    if (!key) return -1;
 
-#define EXPECTED(x) (x)
-#define UNEXPECTED(x) (x)
+    return (pthread_key_create(key, dtor) == 0) ? 0 : -1;
+}
 
-#ifdef _WIN32_PLATFORM_X86
+FORCEINLINE void rpmalloc_tls_delete(tls_t key) {
+    pthread_key_delete(key);
+}
+
+FORCEINLINE void *rpmalloc_tls_get(tls_t key) {
+    return pthread_getspecific(key);
+}
+
+FORCEINLINE int rpmalloc_tls_set(tls_t key, void *val) {
+    return (pthread_setspecific(key, val) == 0) ? 0 : -1;
+}
+
+#elif defined(_WIN32_PLATFORM_X86)
 static struct impl_tls_dtor_entry {
     tls_t key;
     tls_dtor_t dtor;
@@ -345,7 +352,6 @@ FORCEINLINE int rpmalloc_tls_set(tls_t key, void *val) {
     return TlsSetValue(key, val) ? 0 : -1;
 }
 #else
-
 int rpmalloc_tls_create(tls_t *key, tls_dtor_t dtor) {
     if (!key) return -1;
 
@@ -354,7 +360,11 @@ int rpmalloc_tls_create(tls_t *key, tls_dtor_t dtor) {
 }
 
 FORCEINLINE void rpmalloc_tls_delete(tls_t key) {
-    FlsFree(key);
+    tls_t temp = key;
+    if (key != 0) {
+        key = 0;
+        FlsFree(temp);
+    }
 }
 
 FORCEINLINE void *rpmalloc_tls_get(tls_t key) {
@@ -366,54 +376,12 @@ FORCEINLINE int rpmalloc_tls_set(tls_t key, void *val) {
 }
 #endif
 
-#else
-
-#define EXPECTED(x) __builtin_expect((x), 1)
-#define UNEXPECTED(x) __builtin_expect((x), 0)
-
-int rpmalloc_tls_create(tls_t *key, tls_dtor_t dtor) {
-    if (!key) return -1;
-
-    return (pthread_key_create(key, dtor) == 0) ? 0 : -1;
-}
-
-FORCEINLINE void rpmalloc_tls_delete(tls_t key) {
-    pthread_key_delete(key);
-}
-
-FORCEINLINE void *rpmalloc_tls_get(tls_t key) {
-    return pthread_getspecific(key);
-}
-
-FORCEINLINE int rpmalloc_tls_set(tls_t key, void *val) {
-    return (pthread_setspecific(key, val) == 0) ? 0 : -1;
-}
-#endif
-
 ////////////
 ///
 /// Statistics related functions (evaluate to nothing when statistics not enabled)
 ///
 //////
 
-#if ENABLE_STATISTICS
-#  define _rpmalloc_stat_inc(counter) atomic_incr32(counter)
-#  define _rpmalloc_stat_dec(counter) atomic_decr32(counter)
-#  define _rpmalloc_stat_add(counter, value) atomic_add32(counter, (int32_t)(value))
-#  define _rpmalloc_stat_add64(counter, value) atomic_add64(counter, (int64_t)(value))
-#  define _rpmalloc_stat_add_peak(counter, value, peak) do { int32_t _cur_count = atomic_add32(counter, (int32_t)(value)); if (_cur_count > (peak)) peak = _cur_count; } while (0)
-#  define _rpmalloc_stat_sub(counter, value) atomic_add32(counter, -(int32_t)(value))
-#  define _rpmalloc_stat_inc_alloc(heap, class_idx) do { \
-	int32_t alloc_current = atomic_incr32(&heap->size_class_use[class_idx].alloc_current); \
-	if (alloc_current > heap->size_class_use[class_idx].alloc_peak) \
-		heap->size_class_use[class_idx].alloc_peak = alloc_current; \
-	atomic_incr32(&heap->size_class_use[class_idx].alloc_total); \
-} while(0)
-#  define _rpmalloc_stat_inc_free(heap, class_idx) do { \
-	atomic_decr32(&heap->size_class_use[class_idx].alloc_current); \
-	atomic_incr32(&heap->size_class_use[class_idx].free_total); \
-} while(0)
-#else
 #  define _rpmalloc_stat_inc(counter) do {} while(0)
 #  define _rpmalloc_stat_dec(counter) do {} while(0)
 #  define _rpmalloc_stat_add(counter, value) do {} while(0)
@@ -422,7 +390,6 @@ FORCEINLINE int rpmalloc_tls_set(tls_t key, void *val) {
 #  define _rpmalloc_stat_sub(counter, value) do {} while(0)
 #  define _rpmalloc_stat_inc_alloc(heap, class_idx) do {} while(0)
 #  define _rpmalloc_stat_inc_free(heap, class_idx) do {} while(0)
-#endif
 
 
 ///
@@ -509,59 +476,14 @@ typedef struct global_cache_t global_cache_t;
 //! Flag indicating an unmapped master span
 #define SPAN_FLAG_UNMAPPED_MASTER 8U
 
-#if ENABLE_ADAPTIVE_THREAD_CACHE || ENABLE_STATISTICS
+#if ENABLE_ADAPTIVE_THREAD_CACHE
 struct span_use_t {
-	//! Current number of spans used (actually used, not in cache)
-	atomic32_t current;
-	//! High water mark of spans used
-	atomic32_t high;
-#if ENABLE_STATISTICS
-	//! Number of spans in deferred list
-	atomic32_t spans_deferred;
-	//! Number of spans transitioned to global cache
-	atomic32_t spans_to_global;
-	//! Number of spans transitioned from global cache
-	atomic32_t spans_from_global;
-	//! Number of spans transitioned to thread cache
-	atomic32_t spans_to_cache;
-	//! Number of spans transitioned from thread cache
-	atomic32_t spans_from_cache;
-	//! Number of spans transitioned to reserved state
-	atomic32_t spans_to_reserved;
-	//! Number of spans transitioned from reserved state
-	atomic32_t spans_from_reserved;
-	//! Number of raw memory map calls
-	atomic32_t spans_map_calls;
-#endif
-};
+    //! Current number of spans used (actually used, not in cache)
+    atomic32_t current;
+    //! High water mark of spans used
+    atomic32_t high;
+}
 typedef struct span_use_t span_use_t;
-#endif
-
-#if ENABLE_STATISTICS
-struct size_class_use_t {
-	//! Current number of allocations
-	atomic32_t alloc_current;
-	//! Peak number of allocations
-	int32_t alloc_peak;
-	//! Total number of allocations
-	atomic32_t alloc_total;
-	//! Total number of frees
-	atomic32_t free_total;
-	//! Number of spans in use
-	atomic32_t spans_current;
-	//! Number of spans transitioned to cache
-	int32_t spans_peak;
-	//! Number of spans transitioned to cache
-	atomic32_t spans_to_cache;
-	//! Number of spans transitioned from cache
-	atomic32_t spans_from_cache;
-	//! Number of spans transitioned from reserved state
-	atomic32_t spans_from_reserved;
-	//! Number of spans mapped
-	atomic32_t spans_map_calls;
-	int32_t unused;
-};
-typedef struct size_class_use_t size_class_use_t;
 #endif
 
 // A span can either represent a single span of memory pages with size declared by span_map_count configuration variable,
@@ -671,17 +593,9 @@ struct heap_t {
 	//! Arrays of fully freed spans, large spans with > 1 span count
 	span_large_cache_t span_large_cache[LARGE_CLASS_COUNT - 1];
 #endif
-#if ENABLE_ADAPTIVE_THREAD_CACHE || ENABLE_STATISTICS
+#if ENABLE_ADAPTIVE_THREAD_CACHE
 	//! Current and high water mark of spans used per span count
 	span_use_t   span_use[LARGE_CLASS_COUNT];
-#endif
-#if ENABLE_STATISTICS
-	//! Allocation stats per size class
-	size_class_use_t size_class_use[SIZE_CLASS_COUNT + 1];
-	//! Number of bytes transitioned thread -> global
-	atomic64_t   thread_to_global;
-	//! Number of bytes transitioned global -> thread
-	atomic64_t   global_to_thread;
 #endif
 };
 
@@ -703,12 +617,6 @@ struct global_cache_t {
 	atomic32_t lock;
 	//! Cache count
 	uint32_t count;
-#if ENABLE_STATISTICS
-	//! Insert count
-	size_t insert_count;
-	//! Extract count
-	size_t extract_count;
-#endif
 	//! Cached spans
 	span_t* span[GLOBAL_CACHE_MULTIPLIER * MAX_THREAD_SPAN_CACHE];
 	//! Unlimited cache overflow
@@ -778,33 +686,6 @@ static atomic32_t _memory_global_lock;
 //! Orphaned heaps
 static heap_t *_memory_orphan_heaps;
 
-#if ENABLE_STATISTICS
-//! Allocations counter
-static atomic64_t _allocation_counter;
-//! Deallocations counter
-static atomic64_t _deallocation_counter;
-//! Active heap count
-static atomic32_t _memory_active_heaps;
-//! Number of currently mapped memory pages
-static atomic32_t _mapped_pages;
-//! Peak number of concurrently mapped memory pages
-static int32_t _mapped_pages_peak;
-//! Number of mapped master spans
-static atomic32_t _master_spans;
-//! Number of unmapped dangling master spans
-static atomic32_t _unmapped_master_spans;
-//! Running counter of total number of mapped memory pages since start
-static atomic32_t _mapped_total;
-//! Running counter of total number of unmapped memory pages since start
-static atomic32_t _unmapped_total;
-//! Number of currently mapped memory pages in OS calls
-static atomic32_t _mapped_pages_os;
-//! Number of currently allocated pages in huge allocations
-static atomic32_t _huge_pages_current;
-//! Peak number of currently allocated pages in huge allocations
-static int32_t _huge_pages_peak;
-#endif
-
 ////////////
 ///
 /// Thread local heap and ID
@@ -813,7 +694,12 @@ static int32_t _huge_pages_peak;
 
 static inline heap_t *
 get_thread_heap_raw(void) {
+
+#if defined(__TINYC__) || !defined(_WIN32)
+    return (heap_t *)pthread_getspecific(_memory_thread_heap);
+#else
     return (heap_t *)rpmalloc_tls_get(_memory_thread_heap);
+#endif
 }
 
 //! Get the current thread heap
@@ -833,21 +719,19 @@ get_thread_heap(void) {
 //! Fast thread ID
 static inline uintptr_t
 get_thread_id(void) {
-#if defined(_WIN32)
-	return (uintptr_t)((void*)NtCurrentTeb());
-#else
+#if defined(__TINYC__) || !defined(_WIN32)
     uintptr_t tid;
-#  if defined(__i386__)
+#  if defined(__i386__) && !defined(_WIN32)
     __asm__("movl %%gs:0, %0" : "=r" (tid) : : );
-#  elif defined(__x86_64__)
+#  elif defined(__x86_64__) && !defined(_WIN32)
 #    if defined(__MACH__)
     __asm__("movq %%gs:0, %0" : "=r" (tid) : : );
 #    else
     __asm__("movq %%fs:0, %0" : "=r" (tid) : : );
 #    endif
-#  elif defined(__arm__)
+#  elif defined(__arm__) && !defined(_WIN32)
     __asm__ volatile ("mrc p15, 0, %0, c13, c0, 3" : "=r" (tid));
-#  elif defined(__aarch64__)
+#  elif defined(__aarch64__) && !defined(_WIN32)
 #    if defined(__MACH__)
     // tpidr_el0 likely unused, always return 0 on iOS
     __asm__ volatile ("mrs %0, tpidrro_el0" : "=r" (tid));
@@ -857,16 +741,22 @@ get_thread_id(void) {
 #  else
     tid = (uintptr_t)pthread_self();
 #  endif
-	return tid;
+    return tid;
+#else
+    return (uintptr_t)((void *)NtCurrentTeb());
 #endif
 }
 
 //! Set the current thread heap
 static void
-set_thread_heap(heap_t* heap) {
+set_thread_heap(heap_t *heap) {
+#if defined(__TINYC__) || !defined(_WIN32)
+    pthread_setspecific(_memory_thread_heap, (void *)heap);
+#else
     rpmalloc_tls_set(_memory_thread_heap, (void *)heap);
-	if (heap)
-		heap->owner_thread = get_thread_id();
+#endif
+    if (heap)
+        heap->owner_thread = get_thread_id();
 }
 
 //! Set main thread ID
@@ -1334,7 +1224,7 @@ _rpmalloc_span_release_to_cache(heap_t* heap, span_t* span) {
 	rpmalloc_assert(heap == span->heap, "Span heap pointer corrupted");
 	rpmalloc_assert(span->size_class < SIZE_CLASS_COUNT, "Invalid span size class");
 	rpmalloc_assert(span->span_count == 1, "Invalid span count");
-#if ENABLE_ADAPTIVE_THREAD_CACHE || ENABLE_STATISTICS
+#if ENABLE_ADAPTIVE_THREAD_CACHE
 	atomic_decr32(&heap->span_use[0].current);
 #endif
 	_rpmalloc_stat_dec(&heap->size_class_use[span->size_class].spans_current);
@@ -1511,9 +1401,6 @@ _rpmalloc_global_cache_insert_spans(span_t** span, size_t span_count, size_t cou
 	while (!atomic_cas32_acquire(&cache->lock, 1, 0))
 		_rpmalloc_spin();
 
-#if ENABLE_STATISTICS
-	cache->insert_count += count;
-#endif
 	if ((cache->count + insert_count) > cache_limit)
 		insert_count = cache_limit - cache->count;
 
@@ -1587,9 +1474,6 @@ _rpmalloc_global_cache_extract_spans(span_t** span, size_t span_count, size_t co
 	while (!atomic_cas32_acquire(&cache->lock, 1, 0))
 		_rpmalloc_spin();
 
-#if ENABLE_STATISTICS
-	cache->extract_count += count;
-#endif
 	size_t want = count - extract_count;
 	if (want > cache->count)
 		want = cache->count;
@@ -1864,7 +1748,7 @@ _rpmalloc_inc_span_statistics(heap_t* heap, size_t span_count, uint32_t class_id
 	(void)sizeof(heap);
 	(void)sizeof(span_count);
 	(void)sizeof(class_idx);
-#if ENABLE_ADAPTIVE_THREAD_CACHE || ENABLE_STATISTICS
+#if ENABLE_ADAPTIVE_THREAD_CACHE
 	uint32_t idx = (uint32_t)span_count - 1;
 	uint32_t current_count = (uint32_t)atomic_incr32(&heap->span_use[idx].current);
 	if (current_count > (uint32_t)atomic_load32(&heap->span_use[idx].high))
@@ -2080,11 +1964,6 @@ static void _rpmalloc_heap_release(void* heapptr, int first_class, int release_c
 
 	if (get_thread_heap_raw() == heap)
 		set_thread_heap(0);
-
-#if ENABLE_STATISTICS
-	atomic_decr32(&_memory_active_heaps);
-	rpmalloc_assert(atomic_load32(&_memory_active_heaps) >= 0, "Still active heaps during finalization");
-#endif
 
 	// If we are forcibly terminating with _exit the state of the
 	// lock atomic is unknown and it's best to just go ahead and exit
@@ -2523,7 +2402,7 @@ static void _rpmalloc_deallocate_large(span_t* span) {
 	}
 	rpmalloc_assert(span->heap->full_span_count, "Heap span counter corrupted");
 	--span->heap->full_span_count;
-#if ENABLE_ADAPTIVE_THREAD_CACHE || ENABLE_STATISTICS
+#if ENABLE_ADAPTIVE_THREAD_CACHE
 	//Decrease counter
 	size_t idx = span->span_count - 1;
 	atomic_decr32(&span->heap->span_use[idx].current);
@@ -2906,16 +2785,21 @@ rpmalloc_initialize_config(const rpmalloc_config_t* config) {
 	_memory_config.span_map_count = _memory_span_map_count;
 	_memory_config.enable_huge_pages = _memory_huge_pages;
 
-#if defined(_WIN32)
-#ifdef _WIN32_PLATFORM_X86
+#if defined(__TINYC__) || !defined(_WIN32)
+#if !defined(_WIN32)
+    if (pthread_key_create(&_memory_thread_heap, _rpmalloc_heap_release_raw_fc) != 0)
+        return -1;
+#else
+    if (pthread_key_create(&_memory_thread_heap, _rpmalloc_thread_destructor) != 0)
+        return -1;
+#endif
+#else
+#if defined(_WIN32_PLATFORM_X86)
     fls_key = FlsAlloc(&_rpmalloc_thread_destructor);
 #else
     if (rpmalloc_tls_create(&_memory_thread_heap, _rpmalloc_thread_destructor) != 0)
         return -1;
 #endif
-#else
-    if (rpmalloc_tls_create(&_memory_thread_heap, _rpmalloc_heap_release_raw_fc) != 0)
-        return -1;
 #endif
 
 	//Setup all small and medium size classes
@@ -2942,17 +2826,6 @@ rpmalloc_initialize_config(const rpmalloc_config_t* config) {
 	}
 
 	_memory_orphan_heaps = 0;
-#if ENABLE_STATISTICS
-	atomic_store32(&_memory_active_heaps, 0);
-	atomic_store32(&_mapped_pages, 0);
-	_mapped_pages_peak = 0;
-	atomic_store32(&_master_spans, 0);
-	atomic_store32(&_mapped_total, 0);
-	atomic_store32(&_unmapped_total, 0);
-	atomic_store32(&_mapped_pages_os, 0);
-	atomic_store32(&_huge_pages_current, 0);
-	_huge_pages_peak = 0;
-#endif
 	memset(_memory_heaps, 0, sizeof(_memory_heaps));
 	atomic_store32_release(&_memory_global_lock, 0);
 
@@ -2971,7 +2844,6 @@ rpmalloc_finalize(void) {
 
     size_t list_idx, iclass;
     rpmalloc_thread_finalize(1);
-	//rpmalloc_dump_statistics(stdout);
 
 	if (_memory_global_reserve) {
 		atomic_add32(&_memory_global_reserve_master->remaining_spans, -(int32_t)_memory_global_reserve_count);
@@ -2998,19 +2870,17 @@ rpmalloc_finalize(void) {
 		_rpmalloc_global_cache_finalize(&_memory_span_cache[iclass]);
 #endif
 
-	_rpmalloc_initialized = 0;
+    _rpmalloc_initialized = 0;
+
+#if defined(__TINYC__) || !defined(_WIN32)
+    pthread_key_delete(_memory_thread_heap);
+#else
     rpmalloc_tls_delete(_memory_thread_heap);
 #ifdef _WIN32_PLATFORM_X86
     FlsFree(fls_key);
     fls_key = 0;
 #endif
-
-#if ENABLE_STATISTICS
-	//If you hit these asserts you probably have memory leaks (perhaps global scope data doing dynamic allocations) or double frees in your code
-	rpmalloc_assert(atomic_load32(&_mapped_pages) == 0, "Memory leak detected");
-	rpmalloc_assert(atomic_load32(&_mapped_pages_os) == 0, "Memory leak detected");
 #endif
-
 }
 
 //! Initialize thread, assign heap
@@ -3230,46 +3100,11 @@ rpmalloc_thread_statistics(rpmalloc_thread_statistics_t *stats) {
 			stats->spancache += (size_t)deferred->span_count * _memory_span_size;
 		deferred = (span_t*)deferred->free_list;
 	}
-
-#if ENABLE_STATISTICS
-	stats->thread_to_global = (size_t)atomic_load64(&heap->thread_to_global);
-	stats->global_to_thread = (size_t)atomic_load64(&heap->global_to_thread);
-
-	for (iclass = 0; iclass < LARGE_CLASS_COUNT; ++iclass) {
-		stats->span_use[iclass].current = (size_t)atomic_load32(&heap->span_use[iclass].current);
-		stats->span_use[iclass].peak = (size_t)atomic_load32(&heap->span_use[iclass].high);
-		stats->span_use[iclass].to_global = (size_t)atomic_load32(&heap->span_use[iclass].spans_to_global);
-		stats->span_use[iclass].from_global = (size_t)atomic_load32(&heap->span_use[iclass].spans_from_global);
-		stats->span_use[iclass].to_cache = (size_t)atomic_load32(&heap->span_use[iclass].spans_to_cache);
-		stats->span_use[iclass].from_cache = (size_t)atomic_load32(&heap->span_use[iclass].spans_from_cache);
-		stats->span_use[iclass].to_reserved = (size_t)atomic_load32(&heap->span_use[iclass].spans_to_reserved);
-		stats->span_use[iclass].from_reserved = (size_t)atomic_load32(&heap->span_use[iclass].spans_from_reserved);
-		stats->span_use[iclass].map_calls = (size_t)atomic_load32(&heap->span_use[iclass].spans_map_calls);
-	}
-	for (iclass = 0; iclass < SIZE_CLASS_COUNT; ++iclass) {
-		stats->size_use[iclass].alloc_current = (size_t)atomic_load32(&heap->size_class_use[iclass].alloc_current);
-		stats->size_use[iclass].alloc_peak = (size_t)heap->size_class_use[iclass].alloc_peak;
-		stats->size_use[iclass].alloc_total = (size_t)atomic_load32(&heap->size_class_use[iclass].alloc_total);
-		stats->size_use[iclass].free_total = (size_t)atomic_load32(&heap->size_class_use[iclass].free_total);
-		stats->size_use[iclass].spans_to_cache = (size_t)atomic_load32(&heap->size_class_use[iclass].spans_to_cache);
-		stats->size_use[iclass].spans_from_cache = (size_t)atomic_load32(&heap->size_class_use[iclass].spans_from_cache);
-		stats->size_use[iclass].spans_from_reserved = (size_t)atomic_load32(&heap->size_class_use[iclass].spans_from_reserved);
-		stats->size_use[iclass].map_calls = (size_t)atomic_load32(&heap->size_class_use[iclass].spans_map_calls);
-	}
-#endif
 }
 
 void
 rpmalloc_global_statistics(rpmalloc_global_statistics_t* stats) {
 	memset(stats, 0, sizeof(rpmalloc_global_statistics_t));
-#if ENABLE_STATISTICS
-	stats->mapped = (size_t)atomic_load32(&_mapped_pages) * _memory_page_size;
-	stats->mapped_peak = (size_t)_mapped_pages_peak * _memory_page_size;
-	stats->mapped_total = (size_t)atomic_load32(&_mapped_total) * _memory_page_size;
-	stats->unmapped_total = (size_t)atomic_load32(&_unmapped_total) * _memory_page_size;
-	stats->huge_alloc = (size_t)atomic_load32(&_huge_pages_current) * _memory_page_size;
-	stats->huge_alloc_peak = (size_t)_huge_pages_peak * _memory_page_size;
-#endif
 #if ENABLE_GLOBAL_CACHE
     size_t iclass;
     for (iclass = 0; iclass < LARGE_CLASS_COUNT; ++iclass) {
@@ -3290,140 +3125,12 @@ rpmalloc_global_statistics(rpmalloc_global_statistics_t* stats) {
 #endif
 }
 
-#if ENABLE_STATISTICS
-
-static void
-_memory_heap_dump_statistics(heap_t* heap, void* file) {
-	fprintf(file, "Heap %d stats:\n", heap->id);
-    fprintf(file, "Class   CurAlloc  PeakAlloc   TotAlloc    TotFree  BlkSize BlkCount SpansCur SpansPeak  PeakAllocMiB  ToCacheMiB FromCacheMiB FromReserveMiB MmapCalls\n");
-    size_t iclass;
-    for (iclass = 0; iclass < SIZE_CLASS_COUNT; ++iclass) {
-		if (!atomic_load32(&heap->size_class_use[iclass].alloc_total))
-			continue;
-		fprintf(file, "%3u:  %10u %10u %10u %10u %8u %8u %8d %9d %13zu %11zu %12zu %14zu %9u\n", (uint32_t)iclass,
-			atomic_load32(&heap->size_class_use[iclass].alloc_current),
-			heap->size_class_use[iclass].alloc_peak,
-			atomic_load32(&heap->size_class_use[iclass].alloc_total),
-			atomic_load32(&heap->size_class_use[iclass].free_total),
-			_memory_size_class[iclass].block_size,
-			_memory_size_class[iclass].block_count,
-			atomic_load32(&heap->size_class_use[iclass].spans_current),
-			heap->size_class_use[iclass].spans_peak,
-			((size_t)heap->size_class_use[iclass].alloc_peak * (size_t)_memory_size_class[iclass].block_size) / (size_t)(1024 * 1024),
-			((size_t)atomic_load32(&heap->size_class_use[iclass].spans_to_cache) * _memory_span_size) / (size_t)(1024 * 1024),
-			((size_t)atomic_load32(&heap->size_class_use[iclass].spans_from_cache) * _memory_span_size) / (size_t)(1024 * 1024),
-			((size_t)atomic_load32(&heap->size_class_use[iclass].spans_from_reserved) * _memory_span_size) / (size_t)(1024 * 1024),
-			atomic_load32(&heap->size_class_use[iclass].spans_map_calls));
-	}
-    fprintf(file, "Spans  Current     Peak Deferred  PeakMiB  Cached  ToCacheMiB FromCacheMiB ToReserveMiB FromReserveMiB ToGlobalMiB FromGlobalMiB  MmapCalls\n");
-    size_t iclass;
-    for (iclass = 0; iclass < LARGE_CLASS_COUNT; ++iclass) {
-		if (!atomic_load32(&heap->span_use[iclass].high) && !atomic_load32(&heap->span_use[iclass].spans_map_calls))
-			continue;
-		fprintf(file, "%4u: %8d %8u %8u %8zu %7u %11zu %12zu %12zu %14zu %11zu %13zu %10u\n", (uint32_t)(iclass + 1),
-			atomic_load32(&heap->span_use[iclass].current),
-			atomic_load32(&heap->span_use[iclass].high),
-			atomic_load32(&heap->span_use[iclass].spans_deferred),
-			((size_t)atomic_load32(&heap->span_use[iclass].high) * (size_t)_memory_span_size * (iclass + 1)) / (size_t)(1024 * 1024),
-#if ENABLE_THREAD_CACHE
-			(unsigned int)(!iclass ? heap->span_cache.count : heap->span_large_cache[iclass - 1].count),
-			((size_t)atomic_load32(&heap->span_use[iclass].spans_to_cache) * (iclass + 1) * _memory_span_size) / (size_t)(1024 * 1024),
-			((size_t)atomic_load32(&heap->span_use[iclass].spans_from_cache) * (iclass + 1) * _memory_span_size) / (size_t)(1024 * 1024),
-#else
-			0, (size_t)0, (size_t)0,
-#endif
-			((size_t)atomic_load32(&heap->span_use[iclass].spans_to_reserved) * (iclass + 1) * _memory_span_size) / (size_t)(1024 * 1024),
-			((size_t)atomic_load32(&heap->span_use[iclass].spans_from_reserved) * (iclass + 1) * _memory_span_size) / (size_t)(1024 * 1024),
-			((size_t)atomic_load32(&heap->span_use[iclass].spans_to_global) * (size_t)_memory_span_size * (iclass + 1)) / (size_t)(1024 * 1024),
-			((size_t)atomic_load32(&heap->span_use[iclass].spans_from_global) * (size_t)_memory_span_size * (iclass + 1)) / (size_t)(1024 * 1024),
-			atomic_load32(&heap->span_use[iclass].spans_map_calls));
-	}
-	fprintf(file, "Full spans: %zu\n", heap->full_span_count);
-	fprintf(file, "ThreadToGlobalMiB GlobalToThreadMiB\n");
-	fprintf(file, "%17zu %17zu\n", (size_t)atomic_load64(&heap->thread_to_global) / (size_t)(1024 * 1024), (size_t)atomic_load64(&heap->global_to_thread) / (size_t)(1024 * 1024));
-}
-
-#endif
-
-void rpmalloc_dump_statistics(void* file) {
-#if ENABLE_STATISTICS
-    size_t list_idx, iclass;
-    for (list_idx = 0; list_idx < HEAP_ARRAY_SIZE; ++list_idx) {
-		heap_t* heap = _memory_heaps[list_idx];
-		while (heap) {
-			int need_dump = 0;
-			for (iclass = 0; !need_dump && (iclass < SIZE_CLASS_COUNT); ++iclass) {
-				if (!atomic_load32(&heap->size_class_use[iclass].alloc_total)) {
-					rpmalloc_assert(!atomic_load32(&heap->size_class_use[iclass].free_total), "Heap statistics counter mismatch");
-					rpmalloc_assert(!atomic_load32(&heap->size_class_use[iclass].spans_map_calls), "Heap statistics counter mismatch");
-					continue;
-				}
-				need_dump = 1;
-			}
-			for (iclass = 0; !need_dump && (iclass < LARGE_CLASS_COUNT); ++iclass) {
-				if (!atomic_load32(&heap->span_use[iclass].high) && !atomic_load32(&heap->span_use[iclass].spans_map_calls))
-					continue;
-				need_dump = 1;
-			}
-			if (need_dump)
-				_memory_heap_dump_statistics(heap, file);
-			heap = heap->next_heap;
-		}
-	}
-	fprintf(file, "Global stats:\n");
-	size_t huge_current = (size_t)atomic_load32(&_huge_pages_current) * _memory_page_size;
-	size_t huge_peak = (size_t)_huge_pages_peak * _memory_page_size;
-	fprintf(file, "HugeCurrentMiB HugePeakMiB\n");
-	fprintf(file, "%14zu %11zu\n", huge_current / (size_t)(1024 * 1024), huge_peak / (size_t)(1024 * 1024));
-
-#if ENABLE_GLOBAL_CACHE
-	fprintf(file, "GlobalCacheMiB\n");
-	for (iclass = 0; iclass < LARGE_CLASS_COUNT; ++iclass) {
-		global_cache_t* cache = _memory_span_cache + iclass;
-		size_t global_cache = (size_t)cache->count * iclass * _memory_span_size;
-
-		size_t global_overflow_cache = 0;
-		span_t* span = cache->overflow;
-		while (span) {
-			global_overflow_cache += iclass * _memory_span_size;
-			span = span->next;
-		}
-		if (global_cache || global_overflow_cache || cache->insert_count || cache->extract_count)
-			fprintf(file, "%4zu: %8zuMiB (%8zuMiB overflow) %14zu insert %14zu extract\n", iclass + 1, global_cache / (size_t)(1024 * 1024), global_overflow_cache / (size_t)(1024 * 1024), cache->insert_count, cache->extract_count);
-	}
-#endif
-
-	size_t mapped = (size_t)atomic_load32(&_mapped_pages) * _memory_page_size;
-	size_t mapped_os = (size_t)atomic_load32(&_mapped_pages_os) * _memory_page_size;
-	size_t mapped_peak = (size_t)_mapped_pages_peak * _memory_page_size;
-	size_t mapped_total = (size_t)atomic_load32(&_mapped_total) * _memory_page_size;
-	size_t unmapped_total = (size_t)atomic_load32(&_unmapped_total) * _memory_page_size;
-	fprintf(file, "MappedMiB MappedOSMiB MappedPeakMiB MappedTotalMiB UnmappedTotalMiB\n");
-	fprintf(file, "%9zu %11zu %13zu %14zu %16zu\n",
-		mapped / (size_t)(1024 * 1024),
-		mapped_os / (size_t)(1024 * 1024),
-		mapped_peak / (size_t)(1024 * 1024),
-		mapped_total / (size_t)(1024 * 1024),
-		unmapped_total / (size_t)(1024 * 1024));
-
-	fprintf(file, "\n");
-#if 0
-	int64_t allocated = atomic_load64(&_allocation_counter);
-	int64_t deallocated = atomic_load64(&_deallocation_counter);
-	fprintf(file, "Allocation count: %lli\n", allocated);
-	fprintf(file, "Deallocation count: %lli\n", deallocated);
-	fprintf(file, "Current allocations: %lli\n", (allocated - deallocated));
-	fprintf(file, "Master spans: %d\n", atomic_load32(&_master_spans));
-	fprintf(file, "Dangling master spans: %d\n", atomic_load32(&_unmapped_master_spans));
-#endif
-#endif
-	(void)sizeof(file);
-}
-
 static void rp_override_init(void) {
     if (!_rpmalloc_initialized) {
         rpmalloc_initialize();
+#ifndef _WIN32
         atexit(rpmalloc_finalize);
+#endif
     } else if (!rpmalloc_is_thread_initialized()) {
         rpmalloc_thread_initialize();
     }

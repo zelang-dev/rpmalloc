@@ -8,7 +8,9 @@ thread specific functions to handle the removed `thread_local` dependency, and t
 the added `thread_storage(type, variable)` macro
 - Added `cmake` CMakeLists.txt build and GitHub Actions CI
 - Removed `RPMALLOC_FIRST_CLASS_HEAPS` options and routines
+- Removed `ENABLE_STATISTICS` options and routines
 - Replaced C11 `stdatomic.h` with C89 compatible atomics from https://github.com/mackron/c89atomic, which allows builds using Tiny C Compiler to actually work, previously would compile without error, but would just hang/abort on running.
+- Rename c89atomic.h and add atomicity test for so.
 
 1.4.5
 
