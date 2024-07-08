@@ -244,6 +244,8 @@ static tls_t _memory_thread_heap = 0;
 //! Initialized flag
 static int _rpmalloc_initialized = 0;
 
+static int _rpmalloc_shuting_down = 0;
+
 #ifdef _WIN32
 #define EXPECTED(x) (x)
 #define UNEXPECTED(x) (x)
@@ -1347,8 +1349,10 @@ _rpmalloc_span_finalize(heap_t* heap, size_t iclass, span_t* span, span_t** list
 #if defined(ENABLE_ASSERTS)
     printf("memory freed: %d, memory used: %d\n", span->list_size, span->used_count);
 #endif
-    rpmalloc_assert(span->list_size == span->used_count, "Memory leak detected");
-	if (span->list_size == span->used_count) {
+    if(_rpmalloc_shuting_down == 0)
+        rpmalloc_assert(span->list_size == span->used_count, "Memory leak detected");
+
+    if (span->list_size == span->used_count) {
 		_rpmalloc_stat_dec(&heap->span_use[0].current);
 		_rpmalloc_stat_dec(&heap->size_class_use[iclass].spans_current);
 		// This function only used for spans in double linked lists
@@ -3128,12 +3132,19 @@ rpmalloc_global_statistics(rpmalloc_global_statistics_t* stats) {
 static void rp_override_init(void) {
     if (!_rpmalloc_initialized) {
         rpmalloc_initialize();
-#ifndef _WIN32
-        atexit(rpmalloc_finalize);
-#endif
+        atexit(rpmalloc_shutdown);
     } else if (!rpmalloc_is_thread_initialized()) {
         rpmalloc_thread_initialize();
     }
+}
+
+void rpmalloc_shutdown(void) {
+    if (_rpmalloc_shuting_down == 1)
+        return;
+
+    _rpmalloc_shuting_down = 1;
+    rpmalloc_finalize();
+    _rpmalloc_shuting_down = 0;
 }
 
 void *rp_malloc(size_t size) {

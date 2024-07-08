@@ -323,7 +323,6 @@ extern "C" {
 #endif
 
 #if !defined(C89ATOMIC_64BIT) && !defined(C89ATOMIC_32BIT)
-#include <stdint.h>
 #if INTPTR_MAX == INT64_MAX
 #define C89ATOMIC_64BIT
 #else
@@ -2601,6 +2600,7 @@ bit too pedantic with it's warnings. A few notes:
     typedef volatile intmax_t atomic_intmax_t;
     typedef volatile uintmax_t atomic_uintmax_t;
     typedef volatile void *atomic_ptr_t;
+#define make_atomic(type, var)  typedef volatile type var;
 #else
     typedef volatile _Atomic(c89atomic_flag)atomic_flag;
     typedef volatile _Atomic(c89atomic_bool)atomic_bool;
@@ -2622,6 +2622,7 @@ bit too pedantic with it's warnings. A few notes:
     typedef volatile _Atomic(intmax_t)atomic_intmax_t;
     typedef volatile _Atomic(uintmax_t)atomic_uintmax_t;
     typedef volatile _Atomic(void *)atomic_ptr_t;
+#define make_atomic(type, var)  typedef volatile _Atomic(type)var;
 #endif
 
 /* sets an atomic_flag to true and returns the old value */
@@ -2642,7 +2643,7 @@ bit too pedantic with it's warnings. A few notes:
 #define atomic_signal_fence(order)	c89atomic_signal_fence(order)
 
 /* stores a value in an atomic object */
-#define atomic_store(bits, obj, desired)	c89atomic_store_##bits(obj, desired, order)
+#define atomic_store(bits, obj, desired)	c89atomic_store_##bits(obj, desired)
 /* stores a value in an atomic object */
 #define atomic_store_explicit(bits, obj, desired, order)	c89atomic_store_explicit_##bits(obj, desired, order)
 
@@ -2657,9 +2658,9 @@ bit too pedantic with it's warnings. A few notes:
 #define atomic_exchange_explicit(bits, obj, desired, order)	c89atomic_exchange_explicit_##bits(obj, desired, order)
 
 /* swaps a value with an atomic object if the old value is what is expected, otherwise reads the old value */
-#define atomic_compare_exchange_weak(bits, obj, expected, desired)	c89atomic_exchange_##bits(obj, expected, desired)
+#define atomic_compare_exchange_weak(bits, obj, expected, desired)	c89atomic_compare_exchange_##bits(obj, expected, desired)
 /* swaps a value with an atomic object if the old value is what is expected, otherwise reads the old value */
-#define atomic_compare_exchange_weak_explicit(bits, obj, expected, desired, succ, fail)	c89atomic_exchange_explicit_##bits(obj, expected, desired, succ, fail)
+#define atomic_compare_exchange_weak_explicit(bits, obj, expected, desired, succ, fail)	c89atomic_compare_exchange_explicit_##bits(obj, expected, desired, succ, fail)
 
 /* swaps a value with an atomic object if the old value is what is expected, otherwise reads the old value */
 #define atomic_compare_exchange_strong(bits, obj, expected, desired)	c89atomic_compare_exchange_strong_##bits(obj, expected, desired)
@@ -2690,6 +2691,11 @@ bit too pedantic with it's warnings. A few notes:
 #define atomic_fetch_and(bits, obj, arg)	c89atomic_fetch_and_##bits(obj, arg)
 /* atomic bitwise AND */
 #define atomic_fetch_and_explicit(bits, obj, arg, order)	c89atomic_fetch_and_explicit_##bits(obj, arg, order)
+
+/* initializes an existing atomic object */
+#define atomic_init(obj, desired)  c89atomic_store_64(obj, desired)
+/* reads a value from an atomic object then cast to type */
+#define atomic_get(type, obj)  (type)c89atomic_load_64(obj)
 
 #if defined(__clang__) || (defined(__GNUC__) && (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 6)))
 #pragma GCC diagnostic pop  /* long long warnings with Clang. */
