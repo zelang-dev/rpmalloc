@@ -265,7 +265,7 @@ static FORCEINLINE void atomic_store32(atomic32_t * dst, int32_t val) { c89atomi
 static FORCEINLINE int32_t atomic_incr32(atomic32_t * val) { return c89atomic_fetch_add_explicit_32(val, 1, memory_order_relaxed) + 1; }
 static FORCEINLINE int32_t atomic_decr32(atomic32_t * val) { return c89atomic_fetch_add_explicit_32(val, -1, memory_order_relaxed) - 1; }
 static FORCEINLINE int32_t atomic_add32(atomic32_t * val, int32_t add) { return c89atomic_fetch_add_explicit_32(val, add, memory_order_relaxed) + add; }
-static FORCEINLINE int atomic_cas32_acquire(atomic32_t * dst, int32_t val, int32_t ref) { return c89atomic_compare_exchange_weak_explicit_32(dst, &ref, val, memory_order_acquire, memory_order_relaxed); }
+static FORCEINLINE int atomic_cas32_acquire(atomic32_t * dst, int32_t val, int32_t ref) { return atomic_cas_32(dst, &ref, val); }
 static FORCEINLINE void atomic_store32_release(atomic32_t * dst, int32_t val) { c89atomic_store_explicit_32(dst, val, memory_order_release); }
 static FORCEINLINE int64_t atomic_load64(atomic64_t * val) { return c89atomic_load_explicit_64(val, memory_order_relaxed); }
 static FORCEINLINE int64_t atomic_add64(atomic64_t * val, int64_t add) { return c89atomic_fetch_add_explicit_64(val, add, memory_order_relaxed) + add; }
@@ -273,7 +273,7 @@ static FORCEINLINE void *atomic_load_ptr(atomicptr_t *src) { return (void *)c89a
 static FORCEINLINE void atomic_store_ptr(atomicptr_t *dst, void *val) { c89atomic_store_explicit_64((c89atomic_uint64 *)dst, (c89atomic_uint64)val, memory_order_relaxed); }
 static FORCEINLINE void atomic_store_ptr_release(atomicptr_t *dst, void *val) { c89atomic_store_explicit_64((c89atomic_uint64 *)dst, (c89atomic_uint64)val, memory_order_release); }
 static FORCEINLINE void *atomic_exchange_ptr_acquire(atomicptr_t *dst, void *val) { return (void *)c89atomic_exchange_explicit_64((c89atomic_uint64 *)dst, (c89atomic_uint64)val, memory_order_acquire); }
-static FORCEINLINE int atomic_cas_ptr(atomicptr_t *dst, void *val, void *ref) { return c89atomic_compare_exchange_weak_explicit_64((c89atomic_uint64 *)dst, (c89atomic_uint64 *)&ref, (c89atomic_uint64)val, memory_order_relaxed, memory_order_relaxed); }
+static FORCEINLINE int atomic_cas_ptr(atomicptr_t *dst, void *val, void *ref) { return atomic_swap(dst, &ref, val); }
 
 #if defined(__TINYC__) || !defined(_WIN32)
 int rpmalloc_tls_create(tls_t *key, tls_dtor_t dtor) {
