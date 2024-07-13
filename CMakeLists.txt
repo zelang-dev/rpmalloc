@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.8...3.14)
 
 project(
     rpmalloc
-    VERSION 2.0.9
+    VERSION 2.0.10
     DESCRIPTION "General Purpose Memory Allocator"
     HOMEPAGE_URL "https://github.com/zelang-dev/rpmalloc"
     LANGUAGES C
