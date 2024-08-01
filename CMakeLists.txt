@@ -42,7 +42,7 @@ if(UNIX)
     set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -g -D ENABLE_ASSERTS=1")
 else()
     set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} /D ENABLE_ASSERTS=1 ")
-    add_definitions("/wd4244 /wd4267 /wd4033 /wd4715 /wd4996")
+    add_definitions("/wd4244")
 endif()
 
 set(rpmalloc_files rpmalloc/rpmalloc.c )
