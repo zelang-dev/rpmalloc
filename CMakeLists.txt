@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.8...3.14)
 
 project(
     rpmalloc
-    VERSION 2.0.11
+    VERSION 2.0.12
     DESCRIPTION "General Purpose Memory Allocator"
     HOMEPAGE_URL "https://github.com/zelang-dev/rpmalloc"
     LANGUAGES C
@@ -42,6 +42,7 @@ if(UNIX)
     set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -g -D ENABLE_ASSERTS=1")
 else()
     set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} /D ENABLE_ASSERTS=1 ")
+    add_definitions("/wd4244 /wd4267 /wd4033 /wd4715 /wd4996")
 endif()
 
 set(rpmalloc_files rpmalloc/rpmalloc.c )

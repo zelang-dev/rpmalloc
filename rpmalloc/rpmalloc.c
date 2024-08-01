@@ -3147,6 +3147,11 @@ void rpmalloc_shutdown(void) {
     _rpmalloc_shuting_down = 0;
 }
 
+void *rp_memalign(size_t alignment, size_t size) {
+    rp_override_init();
+    return rpmemalign(alignment, size);
+}
+
 void *rp_malloc(size_t size) {
     rp_override_init();
     return rpmalloc(size);
