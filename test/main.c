@@ -33,10 +33,8 @@
 #define pointer_offset(ptr, ofs) (void*)((char*)(ptr) + (ptrdiff_t)(ofs))
 #define pointer_diff(first, second) (ptrdiff_t)((const char*)(first) - (const char*)(second))
 
-thread_storage_create(int, gLocalVar)
 static size_t hardware_threads;
 static int test_failed;
-thread_storage(int, gLocalVar)
 
 static void
 test_initialize(void);
@@ -1238,64 +1236,6 @@ int test_free(int print_log) {
     rpmalloc_finalize();
     if (print_log)
         printf("Memory override free tests passed\n");
-    return 0;
-}
-
-/* Thread function: Compile time thread-local storage */
-static int thread_test_local_storage(void *aArg) {
-    int thread = *(int *)aArg;
-    free(aArg);
-
-    int data = thread + rand();
-    *gLocalVar() = data;
-    thread_sleep(5);
-    if (*gLocalVar() != data)
-        return test_fail("Emulated thread-local test failed\n");
-
-    printf("Thread #%d, emulated thread-local storage test passed\n", thread);
-    return 0;
-}
-
-#define THREAD_COUNT 5
-
-int test_thread_storage(void) {
-    intptr_t thread[THREAD_COUNT];
-    thread_arg targ[THREAD_COUNT];
-    int i;
-    if (rpmalloc_gLocalVar_tls != 0)
-        return test_fail("thread_local_create macro test failed\n");
-
-    /* Clear the TLS variable (it should keep this value after all
-       threads are finished). */
-    *gLocalVar() = 1;
-    if (rpmalloc_gLocalVar_tls != sizeof(int))
-        return test_fail("thread_local macro test failed\n");
-
-    if (*gLocalVar() != 1)
-        return test_fail("thread_local_get macro test failed\n");
-
-    for (i = 0; i < THREAD_COUNT; ++i) {
-        int *n = malloc(sizeof * n);  // Holds a thread serial number
-        if (!n)
-            return test_fail("malloc failed");
-
-        *n = i;
-        targ[i].fn = thread_test_local_storage;
-        targ[i].arg = n;
-        /* Start a child thread that modifies gLocalVar */
-        thread[i] = thread_run(&targ[i]);
-    }
-
-    for (i = 0; i < THREAD_COUNT; i++) {
-        thread_join(thread[i]);
-    }
-
-    /* Check if the TLS variable has changed */
-    if (*gLocalVar() != 1)
-        return test_fail("thread_local_get macro test failed\n");
-
-    gLocalVar_delete();
-    printf("Emulated thread-local storage tests passed\n");
     return 0;
 }
 

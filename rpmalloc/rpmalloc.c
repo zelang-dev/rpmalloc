@@ -283,6 +283,10 @@ int rpmalloc_tls_create(tls_t *key, tls_dtor_t dtor) {
 }
 
 FORCEINLINE void rpmalloc_tls_delete(tls_t key) {
+    void *ptr = rpmalloc_tls_get(key);
+    if (ptr != NULL)
+        rpfree(ptr);
+
     pthread_key_delete(key);
 }
 
@@ -3022,13 +3026,11 @@ rpaligned_calloc(size_t alignment, size_t num, size_t size) {
 	return block;
 }
 
-extern inline RPMALLOC_ALLOCATOR void*
-rpmemalign(size_t alignment, size_t size) {
+extern inline RPMALLOC_ALLOCATOR void* rpmemalign(size_t alignment, size_t size) {
 	return rpaligned_alloc(alignment, size);
 }
 
-extern inline int
-rpposix_memalign(void **memptr, size_t alignment, size_t size) {
+extern inline int rpposix_memalign(void **memptr, size_t alignment, size_t size) {
 	if (memptr)
 		*memptr = rpaligned_alloc(alignment, size);
 	else
@@ -3149,7 +3151,7 @@ void rpmalloc_shutdown(void) {
 
 void *rp_memalign(size_t alignment, size_t size) {
     rp_override_init();
-    return rpmemalign(alignment, size);
+    return rpaligned_alloc(alignment, size);
 }
 
 void *rp_malloc(size_t size) {
