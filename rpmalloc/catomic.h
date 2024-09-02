@@ -59,6 +59,11 @@ typedef unsigned int            c89atomic_uint32;
 typedef unsigned char           c89atomic_bool;
 /* End Sized Types */
 
+#if defined(__TINYC__) || defined(_MSC_VER)
+#include <intrin.h>
+#   define c89atomic_is_lock_free(obj) (sizeof((obj)) <= sizeof(void *))
+#endif
+
 
 /* Architecture Detection */
 #if !defined(C89ATOMIC_64BIT) && !defined(C89ATOMIC_32BIT)
@@ -108,7 +113,6 @@ typedef unsigned char           c89atomic_bool;
 /* Inline */
 /* We want to encourage the compiler to inline. When adding support for a new compiler, make sure it's handled here. */
 #if defined(_MSC_VER)
-#   define c89atomic_is_lock_free(obj) (sizeof((obj)) <= sizeof(void *))
 #   define C89ATOMIC_INLINE __forceinline
 #elif defined(__GNUC__)
     /*

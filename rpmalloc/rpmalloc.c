@@ -179,7 +179,7 @@
 #include <string.h>
 #include <errno.h>
 
-#if defined(_WIN32)
+#if defined(_WIN32) && defined(_MSC_VER)
 #include <fibersapi.h>
 static tls_t fls_key = 0;
 #endif
@@ -260,19 +260,19 @@ typedef volatile _Atomic(c89atomic_uint64)atomic64_t;
 typedef volatile _Atomic(void *)atomicptr_t;
 #endif
 
-static FORCEINLINE int32_t atomic_load32(atomic32_t * src) { return c89atomic_load_explicit_32(src, memory_order_relaxed); }
-static FORCEINLINE void atomic_store32(atomic32_t * dst, int32_t val) { c89atomic_store_explicit_32(dst, val, memory_order_relaxed); }
-static FORCEINLINE int32_t atomic_incr32(atomic32_t * val) { return c89atomic_fetch_add_explicit_32(val, 1, memory_order_relaxed) + 1; }
-static FORCEINLINE int32_t atomic_decr32(atomic32_t * val) { return c89atomic_fetch_add_explicit_32(val, -1, memory_order_relaxed) - 1; }
-static FORCEINLINE int32_t atomic_add32(atomic32_t * val, int32_t add) { return c89atomic_fetch_add_explicit_32(val, add, memory_order_relaxed) + add; }
-static FORCEINLINE int atomic_cas32_acquire(atomic32_t * dst, int32_t val, int32_t ref) { return atomic_cas_32(dst, &ref, val); }
-static FORCEINLINE void atomic_store32_release(atomic32_t * dst, int32_t val) { c89atomic_store_explicit_32(dst, val, memory_order_release); }
+static FORCEINLINE int32_t atomic_load32(atomic32_t * src) { return c89atomic_load_explicit_32((volatile c89atomic_uint32 *)src, memory_order_relaxed); }
+static FORCEINLINE void atomic_store32(atomic32_t * dst, int32_t val) { c89atomic_store_explicit_32((volatile c89atomic_uint32 *)dst, val, memory_order_relaxed); }
+static FORCEINLINE int32_t atomic_incr32(atomic32_t * val) { return c89atomic_fetch_add_explicit_32((volatile c89atomic_uint32 *)val, 1, memory_order_relaxed) + 1; }
+static FORCEINLINE int32_t atomic_decr32(atomic32_t * val) { return c89atomic_fetch_add_explicit_32((volatile c89atomic_uint32 *)val, -1, memory_order_relaxed) - 1; }
+static FORCEINLINE int32_t atomic_add32(atomic32_t * val, int32_t add) { return c89atomic_fetch_add_explicit_32((volatile c89atomic_uint32 *)val, add, memory_order_relaxed) + add; }
+static FORCEINLINE int atomic_cas32_acquire(atomic32_t * dst, int32_t val, int32_t ref) { return c89atomic_compare_exchange_weak_explicit_32((volatile c89atomic_uint32 *)dst, &ref, val, memory_order_acquire, memory_order_relaxed); }
+static FORCEINLINE void atomic_store32_release(atomic32_t * dst, int32_t val) { c89atomic_store_explicit_32((volatile c89atomic_uint32 *)dst, val, memory_order_release); }
 static FORCEINLINE int64_t atomic_load64(atomic64_t * val) { return c89atomic_load_explicit_64(val, memory_order_relaxed); }
 static FORCEINLINE int64_t atomic_add64(atomic64_t * val, int64_t add) { return c89atomic_fetch_add_explicit_64(val, add, memory_order_relaxed) + add; }
-static FORCEINLINE void *atomic_load_ptr(atomicptr_t *src) { return (void *)c89atomic_load_explicit_64((c89atomic_uint64 *)src, memory_order_relaxed); }
-static FORCEINLINE void atomic_store_ptr(atomicptr_t *dst, void *val) { c89atomic_store_explicit_64((c89atomic_uint64 *)dst, (c89atomic_uint64)val, memory_order_relaxed); }
-static FORCEINLINE void atomic_store_ptr_release(atomicptr_t *dst, void *val) { c89atomic_store_explicit_64((c89atomic_uint64 *)dst, (c89atomic_uint64)val, memory_order_release); }
-static FORCEINLINE void *atomic_exchange_ptr_acquire(atomicptr_t *dst, void *val) { return (void *)c89atomic_exchange_explicit_64((c89atomic_uint64 *)dst, (c89atomic_uint64)val, memory_order_acquire); }
+static FORCEINLINE void *atomic_load_ptr(atomicptr_t * src) { return (void *)c89atomic_load_explicit_64((volatile c89atomic_uint64 *)src, memory_order_relaxed); }
+static FORCEINLINE void atomic_store_ptr(atomicptr_t *dst, void *val) { c89atomic_store_explicit_64((volatile c89atomic_uint64 *)dst, (c89atomic_uint64)val, memory_order_relaxed); }
+static FORCEINLINE void atomic_store_ptr_release(atomicptr_t * dst, void *val) { c89atomic_store_explicit_64((volatile c89atomic_uint64 *)dst, (c89atomic_uint64)val, memory_order_release); }
+static FORCEINLINE void *atomic_exchange_ptr_acquire(atomicptr_t * dst, void *val) { return (void *)c89atomic_exchange_explicit_64((volatile c89atomic_uint64 *)dst, (c89atomic_uint64)val, memory_order_acquire); }
 static FORCEINLINE int atomic_cas_ptr(atomicptr_t *dst, void *val, void *ref) { return atomic_swap(dst, &ref, val); }
 
 #if defined(__TINYC__) || !defined(_WIN32)
@@ -744,6 +744,8 @@ get_thread_id(void) {
 #    else
     __asm__ volatile ("mrs %0, tpidr_el0" : "=r" (tid));
 #    endif
+#  elif defined(_WIN32)
+    tid = (uintptr_t)pthread_self().p;
 #  else
     tid = (uintptr_t)pthread_self();
 #  endif
@@ -2662,7 +2664,7 @@ rpmalloc_initialize_config(const rpmalloc_config_t* config) {
 		if (_memory_config.enable_huge_pages) {
 #if defined(__linux__)
 			size_t huge_page_size = 0;
-			FILE* meminfo = fopen("/proc/meminfo", "r");
+			FILE *meminfo = fopen("/proc/meminfo", "r");
 			if (meminfo) {
 				char line[128];
 				while (!huge_page_size && fgets(line, sizeof(line) - 1, meminfo)) {
@@ -2689,10 +2691,10 @@ rpmalloc_initialize_config(const rpmalloc_config_t* config) {
                 _memory_huge_pages = 1;
 				_memory_page_size = defsize;
 				if ((nsize = getpagesizes(sizes, 4)) >= 2) {
-					nsize --;
+					nsize--;
 					for (csize = sizes[nsize]; nsize >= 0 && csize; --nsize, csize = sizes[nsize]) {
 						//! Unlikely, but as a precaution..
-						rpmalloc_assert(!(csize & (csize -1)) && !(csize % 1024), "Invalid page size");
+						rpmalloc_assert(!(csize & (csize - 1)) && !(csize % 1024), "Invalid page size");
 						if (defsize < csize) {
 							_memory_page_size = csize;
 							break;
