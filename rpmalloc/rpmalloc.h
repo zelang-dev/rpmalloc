@@ -30,7 +30,7 @@ extern "C" {
 # define RPMALLOC_ATTRIB_ALLOC_SIZE2(count, size)  __attribute__((alloc_size(count, size)))
 # endif
 # define RPMALLOC_CDECL
-#elif defined(_MSC_VER)
+#elif defined(_MSC_VER) && !defined(__TINYC__)
 # define RPMALLOC_EXPORT
 # define RPMALLOC_ALLOCATOR __declspec(allocator) __declspec(restrict)
 # define RPMALLOC_ATTRIB_MALLOC
@@ -312,9 +312,23 @@ typedef void (*tls_dtor_t)(void *);
 typedef void(__stdcall *tls_dtor_t)(PVOID lpFlsData);
 #endif
 #endif
+
 #include <stdlib.h>
 #include <stdbool.h>
-#include "catomic.h"
+
+#if !defined(__TINYC__)
+#   include "catomic.h"
+#else
+#   ifdef _WIN32
+#       undef WIN32_LEAN_AND_MEAN
+#       define __TINY_ATOMIC__ 1
+#       include <atomic.h>
+#       include <intrin.h>
+#   else
+#       include <stdatomic.h>
+#   endif
+#   include "catomic.h"
+#endif
 
 C_API int rpmalloc_tls_create(tls_t *key, tls_dtor_t dtor);
 C_API void rpmalloc_tls_delete(tls_t key);
