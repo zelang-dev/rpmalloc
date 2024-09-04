@@ -787,6 +787,8 @@ get_thread_id(void) {
 #  elif defined(__x86_64__) && !defined(_WIN32)
 #    if defined(__MACH__)
     __asm__("movq %%gs:0, %0" : "=r" (tid) : : );
+#   elif defined(__TINYC__)
+    tid = (uintptr_t)pthread_self();
 #    else
     __asm__("movq %%fs:0, %0" : "=r" (tid) : : );
 #    endif
