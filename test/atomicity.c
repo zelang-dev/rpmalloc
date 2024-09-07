@@ -1,6 +1,7 @@
 /* Test program for atomicity from https://en.cppreference.com/w/c/language/atomic */
 
 #include <rpmalloc.h>
+#include <catomic.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <assert.h>
