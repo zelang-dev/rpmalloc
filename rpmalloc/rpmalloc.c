@@ -94,10 +94,6 @@
 //! Enable asserts
 #define ENABLE_ASSERTS            0
 #endif
-#ifndef ENABLE_PRELOAD
-//! Support preloading
-#define ENABLE_PRELOAD            0
-#endif
 #ifndef DISABLE_UNMAP
 //! Disable unmapping memory pages (also enables unlimited cache)
 #define DISABLE_UNMAP             0

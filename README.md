@@ -59,16 +59,12 @@ __rpmalloc_config__: Get the current runtime configuration of the allocator
 
 Then simply use the __rpmalloc__/__rpfree__ and the other malloc style replacement functions. Remember all allocations are 16-byte aligned, so no need to call the explicit rpmemalign/rpaligned_alloc/rpposix_memalign functions unless you need greater alignment, they are simply wrappers to make it easier to replace in existing code.
 
-If you wish to override the standard library malloc family of functions and have automatic initialization/finalization of process and threads, define __ENABLE_OVERRIDE__ to non-zero which will include the `malloc.c` file in compilation of __rpmalloc.c__, and then rebuild the library or your project where you added the rpmalloc source. If you compile rpmalloc as a separate library you must make the linker use the override symbols from the library by referencing at least one symbol. The easiest way is to simply include `rpmalloc.h` in at least one source file and call `rpmalloc_linker_reference` somewhere - it's a dummy empty function. On Windows platforms and C++ overrides you have to `#include <rpnew.h>` in at least one source file and also manually handle the initialize/finalize of the process and all threads. The list of libc entry points replaced may not be complete, use libc/stdc++ replacement only as a convenience for testing the library on an existing code base, not a final solution.
-
-For explicit first class heaps, see the __rpmalloc_heap_*__ API under [first class heaps](#first-class-heaps) section, requiring __RPMALLOC_FIRST_CLASS_HEAPS__ tp be defined to 1.
-
 # Building
-To compile as a static library run the configure python script which generates a Ninja build script, then build using ninja. The ninja build produces two static libraries, one named `rpmalloc` and one named `rpmallocwrap`, where the latter includes the libc entry point overrides.
+Just include `rpmalloc.c` into your application/library, and Add `catomic.h`, and `rpmalloc.h` header flies.
 
-The configure + ninja build also produces two shared object/dynamic libraries. The `rpmallocwrap` shared library can be used with LD_PRELOAD/DYLD_INSERT_LIBRARIES to inject in a preexisting binary, replacing any malloc/free family of function calls. This is only implemented for Linux and macOS targets. The list of libc entry points replaced may not be complete, use preloading as a convenience for testing the library on an existing binary, not a final solution. The dynamic library also provides automatic init/fini of process and threads for all platforms.
+The build system here uses **CMake**. To compile as a shared library run `cmake .. -DBUILD_SHARED_LIBS=ON`.
 
-The latest stable release is available in the master branch. For latest development code, use the develop branch.
+The latest stable release is available in the **main** branch, with various tags.
 
 # Cache configuration options
 Free memory pages are cached both per thread and in a global cache for all threads. The size of the thread caches is determined by an adaptive scheme where each cache is limited by a percentage of the maximum allocation count of the corresponding size class. The size of the global caches is determined by a multiple of the maximum of all thread caches. The factors controlling the cache sizes can be set by editing the individual defines in the `rpmalloc.c` source file for fine tuned control.
@@ -86,17 +82,11 @@ __ENABLE_THREAD_CACHE__: By default defined to 1, enables the per-thread cache. 
 __ENABLE_ADAPTIVE_THREAD_CACHE__: Introduces a simple heuristics in the thread cache size, keeping 25% of the high water mark for each span count class.
 
 # Other configuration options
-Detailed statistics are available if __ENABLE_STATISTICS__ is defined to 1 (default is 0, or disabled), either on compile command line or by setting the value in `rpmalloc.c`. This will cause a slight overhead in runtime to collect statistics for each memory operation, and will also add 4 bytes overhead per allocation to track sizes.
-
 Integer safety checks on all calls are enabled if __ENABLE_VALIDATE_ARGS__ is defined to 1 (default is 0, or disabled), either on compile command line or by setting the value in `rpmalloc.c`. If enabled, size arguments to the global entry points are verified not to cause integer overflows in calculations.
 
 Asserts are enabled if __ENABLE_ASSERTS__ is defined to 1 (default is 0, or disabled), either on compile command line or by setting the value in `rpmalloc.c`.
 
-To include __malloc.c__ in compilation and provide overrides of standard library malloc entry points define __ENABLE_OVERRIDE__ to 1. To enable automatic initialization of finalization of process and threads in order to preload the library into executables using standard library malloc, define __ENABLE_PRELOAD__ to 1.
-
 To enable the runtime configurable memory page and span sizes, define __RPMALLOC_CONFIGURABLE__ to 1. By default, memory page size is determined by system APIs and memory span size is set to 64KiB.
-
-To enable support for first class heaps, define __RPMALLOC_FIRST_CLASS_HEAPS__ to 1. By default, the first class heap API is disabled.
 
 # Huge pages
 The allocator has support for huge/large pages on Windows, Linux and MacOS. To enable it, pass a non-zero value in the config value `enable_huge_pages` when initializing the allocator with `rpmalloc_initialize_config`. If the system does not support huge pages it will be automatically disabled. You can query the status by looking at `enable_huge_pages` in the config returned from a call to `rpmalloc_config` after initialization is done.
@@ -141,9 +131,6 @@ There is no memory fragmentation by the allocator in the sense that it will not 
 However, there is memory fragmentation in the meaning that a request for x bytes followed by a request of y bytes where x and y are at least one size class different in size will return blocks that are at least one memory page apart in virtual address space. Only blocks of the same size will potentially be within the same memory page span.
 
 rpmalloc keeps an "active span" and free list for each size class. This leads to back-to-back allocations will most likely be served from within the same span of memory pages (unless the span runs out of free blocks). The rpmalloc implementation will also use any "holes" in memory pages in semi-filled spans before using a completely free span.
-
-# First class heaps
-rpmalloc provides a first class heap type with explicit heap control API. Heaps are maintained with calls to __rpmalloc_heap_acquire__ and __rpmalloc_heap_release__ and allocations/frees are done with __rpmalloc_heap_alloc__ and __rpmalloc_heap_free__. See the `rpmalloc.h` documentation for the full list of functions in the heap API. The main use case of explicit heap control is to scope allocations in a heap and release everything with a single call to __rpmalloc_heap_free_all__ without having to maintain ownership of memory blocks. Note that the heap API is not thread-safe, the caller must make sure that each heap is only used in a single thread at any given time.
 
 # Producer-consumer scenario
 Compared to the some other allocators, rpmalloc does not suffer as much from a producer-consumer thread scenario where one thread allocates memory blocks and another thread frees the blocks. In some allocators the free blocks need to traverse both the thread cache of the thread doing the free operations as well as the global cache before being reused in the allocating thread. In rpmalloc the freed blocks will be reused as soon as the allocating thread needs to get new spans from the thread cache. This enables faster release of completely freed memory pages as blocks in a memory page will not be aliased between different owning threads.

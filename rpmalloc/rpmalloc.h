@@ -21,7 +21,7 @@ extern "C" {
 #if defined(__clang__) || defined(__GNUC__)
 # define RPMALLOC_EXPORT __attribute__((visibility("default")))
 # define RPMALLOC_ALLOCATOR
-# if (defined(__clang_major__) && (__clang_major__ < 4)) || (defined(__GNUC__) && defined(ENABLE_PRELOAD) && ENABLE_PRELOAD)
+# if (defined(__clang_major__) && (__clang_major__ < 4))
 # define RPMALLOC_ATTRIB_MALLOC
 # define RPMALLOC_ATTRIB_ALLOC_SIZE(size)
 # define RPMALLOC_ATTRIB_ALLOC_SIZE2(count, size)
