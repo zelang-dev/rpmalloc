@@ -274,7 +274,7 @@ static FORCEINLINE void *atomic_load_ptr(atomic_ptr_t *src) { return (void *)c89
 static FORCEINLINE void atomic_store_ptr(atomic_ptr_t *dst, void *val) { c89atomic_store_explicit_64((volatile c89atomic_uint64 *)dst, (c89atomic_uint64)val, memory_order_relaxed); }
 static FORCEINLINE void atomic_store_ptr_release(atomic_ptr_t *dst, void *val) { c89atomic_store_explicit_64((volatile c89atomic_uint64 *)dst, (c89atomic_uint64)val, memory_order_release); }
 static FORCEINLINE void *atomic_exchange_ptr_acquire(atomic_ptr_t *dst, void *val) { return (void *)c89atomic_exchange_explicit_64((volatile c89atomic_uint64 *)dst, (c89atomic_uint64)val, memory_order_acquire); }
-static FORCEINLINE int atomic_cas_ptr(atomic_ptr_t *dst, void *val, void *ref) { return (int)atomic_swap((volatile c89atomic_uint64 *)dst, (c89atomic_uint64 *)&ref, (c89atomic_uint64)val); }
+static FORCEINLINE int atomic_cas_ptr(atomic_ptr_t *dst, void *val, void *ref) { return (int)atomic_swap(dst, &ref, (c89atomic_uint64)val); }
 
 #if defined(__TINYC__) || !defined(_WIN32)
 int rpmalloc_tls_create(tls_t *key, tls_dtor_t dtor) {
@@ -1356,7 +1356,8 @@ _rpmalloc_span_finalize(heap_t * heap, size_t iclass, span_t * span, span_t * *l
     }
     //If this assert triggers you have memory leaks
 #if defined(ENABLE_ASSERTS)
-    printf("memory freed: %d, memory used: %d\n", span->list_size, span->used_count);
+    if (span->list_size != span->used_count)
+        printf("memory freed: %d, memory used: %d: heap: %p\n", span->list_size, span->used_count, free_list);
 #endif
     if (_rpmalloc_shuting_down == 0)
         rpmalloc_assert(span->list_size == span->used_count, "Memory leak detected");
