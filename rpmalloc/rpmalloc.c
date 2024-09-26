@@ -62,7 +62,7 @@
 
 #if __has_builtin(__builtin_assume)
 #define rpmalloc_assume(cond) __builtin_assume(cond)
-#elif defined(__GNUC__)
+#elif defined(__GNUC__) && !defined(__APPLE__)
 #define rpmalloc_assume(cond) 												\
 	do {														\
 		if (!__builtin_expect(cond, 0))										\
