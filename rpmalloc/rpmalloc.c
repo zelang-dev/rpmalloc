@@ -261,6 +261,29 @@ static int _rpmalloc_shuting_down = 0;
 make_atomic(unsigned int, atomic32_t)
 make_atomic(unsigned long long, atomic64_t)
 
+#if defined(__TINYC__) && (defined(__arm__) || defined(__aarch64__) || defined(__riscv))
+static FORCEINLINE int32_t atomic_load32(atomic32_t *src) {
+    return atomic_load_explicit((volatile c89atomic_uint32 *)src, memory_order_relaxed);
+}
+static FORCEINLINE void atomic_store32(atomic32_t *dst, int32_t val) {
+    atomic_store_explicit((volatile c89atomic_uint32 *)dst, (c89atomic_uint32)val, memory_order_relaxed);
+}
+static FORCEINLINE int32_t atomic_incr32(atomic32_t *val) {
+    return atomic_fetch_add_explicit((volatile c89atomic_uint32 *)val, 1, memory_order_relaxed) + 1;
+}
+static FORCEINLINE int32_t atomic_decr32(atomic32_t *val) {
+    return atomic_fetch_add_explicit((volatile c89atomic_uint32 *)val, -1, memory_order_relaxed) - 1;
+}
+static FORCEINLINE int32_t atomic_add32(atomic32_t *val, int32_t add) {
+    return atomic_fetch_add_explicit((volatile c89atomic_uint32 *)val, (c89atomic_uint32)add, memory_order_relaxed) + add;
+}
+static FORCEINLINE int atomic_cas32_acquire(atomic32_t *dst, int32_t val, int32_t ref) {
+    return atomic_compare_exchange_weak_explicit((volatile c89atomic_uint32 *)dst, &ref, (c89atomic_uint32)val, memory_order_acquire, memory_order_relaxed);
+}
+static FORCEINLINE void atomic_store32_release(atomic32_t *dst, int32_t val) {
+    atomic_store_explicit((volatile c89atomic_uint32 *)dst, (c89atomic_uint32)val, memory_order_release);
+}
+#else
 static FORCEINLINE int32_t atomic_load32(atomic32_t *src) {
     return c89atomic_load_explicit_32(src, memory_order_relaxed);
 }
@@ -282,14 +305,9 @@ static FORCEINLINE int atomic_cas32_acquire(atomic32_t *dst, int32_t val, int32_
 static FORCEINLINE void atomic_store32_release(atomic32_t *dst, int32_t val) {
     c89atomic_store_explicit_32(dst, val, memory_order_release);
 }
-static FORCEINLINE int64_t atomic_load64(atomic64_t *val) {
-    return c89atomic_load_explicit_64((volatile c89atomic_uint64 *)val, memory_order_relaxed);
-}
-static FORCEINLINE int64_t atomic_add64(atomic64_t *val, int64_t add) {
-    return c89atomic_fetch_add_explicit_64((volatile c89atomic_uint64 *)val, add, memory_order_relaxed) + add;
-}
+#endif
 
-#ifdef __arm__
+#if defined(__arm__)
 static FORCEINLINE void *atomic_load_ptr(atomic_ptr_t *src) {
     return (void *)atomic_load_explicit(src, memory_order_relaxed);
 }
@@ -845,8 +863,8 @@ _rpmalloc_spin(void) {
     __asm__ volatile("or 27,27,27");
 #elif defined(__sparc__)
     __asm__ volatile("rd %ccr, %g0 \n\trd %ccr, %g0 \n\trd %ccr, %g0");
-#elif defined(_WIN32)
-    usleep(0);
+#elif defined(__TINYC__)
+    sched_yield();
 #else
     struct timespec ts = {0};
     nanosleep(&ts, 0);
