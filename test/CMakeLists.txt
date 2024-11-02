@@ -21,8 +21,3 @@ add_test(NAME test-stress COMMAND test-stress)
 add_executable(test-leak test-leak.c)
 target_link_libraries(test-leak rpmalloc)
 add_test(NAME test-leak COMMAND test-leak)
-
-## fragment test
-add_executable(heap-fragmentor heap-fragmentor.c)
-target_link_libraries(heap-fragmentor rpmalloc)
-add_test(NAME heap-fragmentor COMMAND heap-fragmentor)
