@@ -1425,7 +1425,7 @@ _rpmalloc_span_finalize(heap_t * heap, size_t iclass, span_t * span, span_t * *l
     }
     //If this assert triggers you have memory leaks
 #if defined(ENABLE_ASSERTS)
-    if (span->list_size != span->used_count)
+    if (span->list_size != span->used_count && free_list != NULL)
         printf("memory freed: %d, memory used: %d: heap: %p\n", span->list_size, span->used_count, free_list);
 #endif
     if (_rpmalloc_shuting_down == 0)
