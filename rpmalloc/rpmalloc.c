@@ -2094,7 +2094,7 @@ _rpmalloc_heap_finalize(heap_t * heap) {
             span_t *class_span = (span_t *)((uintptr_t)heap->size_class[iclass].free_list & _memory_span_mask);
             span_t **list = 0;
             --heap->full_span_count;
-            if (!_rpmalloc_span_finalize(heap, iclass, class_span, list)) {
+            if (class_span != NULL && !_rpmalloc_span_finalize(heap, iclass, class_span, list)) {
                 if (list)
                     _rpmalloc_span_double_link_list_remove(list, class_span);
                 _rpmalloc_span_double_link_list_add(&heap->size_class[iclass].partial_span, class_span);
