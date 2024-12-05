@@ -239,6 +239,7 @@ static tls_t _memory_thread_heap = 0;
 
 //! Initialized flag
 static int _rpmalloc_initialized = 0;
+static int rpmalloc_atexit_set = 0;
 
 static int _rpmalloc_shuting_down = 0;
 
@@ -3205,12 +3206,16 @@ rpmalloc_global_statistics(rpmalloc_global_statistics_t * stats) {
 #endif
 }
 
-static void rp_override_init(void) {
-    if (!_rpmalloc_initialized) {
+void rpmalloc_init(void) {
+    if (!_rpmalloc_initialized && !_rpmalloc_shuting_down) {
         rpmalloc_initialize();
-        atexit(rpmalloc_shutdown);
     } else if (!rpmalloc_is_thread_initialized()) {
         rpmalloc_thread_initialize();
+    }
+
+    if (!rpmalloc_atexit_set) {
+        rpmalloc_atexit_set = true;
+        atexit(rpmalloc_shutdown);
     }
 }
 
@@ -3224,22 +3229,22 @@ void rpmalloc_shutdown(void) {
 }
 
 void *rp_memalign(size_t alignment, size_t size) {
-    rp_override_init();
+    rpmalloc_init();
     return rpaligned_alloc(alignment, size);
 }
 
 void *rp_malloc(size_t size) {
-    rp_override_init();
+    rpmalloc_init();
     return rpmalloc(size);
 }
 
 void *rp_calloc(size_t count, size_t size) {
-    rp_override_init();
+    rpmalloc_init();
     return rpcalloc(count, size);
 }
 
 void *rp_realloc(void *ptr, size_t size) {
-    rp_override_init();
+    rpmalloc_init();
     return rprealloc(ptr, size);
 }
 
