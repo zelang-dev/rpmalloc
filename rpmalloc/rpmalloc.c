@@ -2540,7 +2540,7 @@ _rpmalloc_deallocate(void *p) {
     _rpmalloc_stat_add64(&_deallocation_counter, 1);
     //Grab the span (always at start of span, using span alignment)
     span_t *span = (span_t *)((uintptr_t)p & _memory_span_mask);
-    if (UNEXPECTED(!span) || span->heap == NULL)
+    if (UNEXPECTED(!span) || p == NULL)
         return;
     if (EXPECTED(span->size_class < SIZE_CLASS_COUNT))
         _rpmalloc_deallocate_small_or_medium(span, p);
