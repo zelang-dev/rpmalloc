@@ -308,7 +308,7 @@ static FORCEINLINE void atomic_store32_release(atomic32_t *dst, int32_t val) {
 }
 #endif
 
-#if defined(__arm__)
+#if defined(__arm__) || defined(_X86_) || defined(__i386__) || defined(__i486__) || defined(__i586__) || defined(__i686__)
 static FORCEINLINE void *atomic_load_ptr(atomic_ptr_t *src) {
     return (void *)atomic_load_explicit(src, memory_order_relaxed);
 }
