@@ -21,7 +21,7 @@ terms of the MIT license.
 #include <string.h>
 #include <assert.h>
 #include <rpmalloc.h>
-#include <catomic.h>
+#include <catomics.h>
 
 // > mimalloc-test-stress [THREADS] [SCALE] [ITER]
 //
