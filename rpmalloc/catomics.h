@@ -134,22 +134,22 @@ extern "C" {
  */
 
 #ifndef __ATOMIC_RELAXED
-#define __ATOMIC_RELAXED                0
+#	define __ATOMIC_RELAXED                0
 #endif
 #ifndef __ATOMIC_CONSUME
-#define __ATOMIC_CONSUME                1
+#	define __ATOMIC_CONSUME                1
 #endif
 #ifndef __ATOMIC_ACQUIRE
-#define __ATOMIC_ACQUIRE                2
+#	define __ATOMIC_ACQUIRE                2
 #endif
 #ifndef __ATOMIC_RELEASE
-#define __ATOMIC_RELEASE                3
+#	define __ATOMIC_RELEASE                3
 #endif
 #ifndef __ATOMIC_ACQ_REL
-#define __ATOMIC_ACQ_REL                4
+#	define __ATOMIC_ACQ_REL                4
 #endif
 #ifndef __ATOMIC_SEQ_CST
-#define __ATOMIC_SEQ_CST                5
+#	define __ATOMIC_SEQ_CST                5
 #endif
 
 /*
@@ -174,15 +174,15 @@ extern "C" {
 #if defined(_MSC_VER)
 #   define ATOMICS_INLINE __forceinline
 #elif defined(__GNUC__)
-#if defined(__STRICT_ANSI__) || !defined(__STDC_VERSION__) || (__STDC_VERSION__ < 199901L)
-#define ATOMICS_INLINE __inline__ __attribute__((always_inline))
-#else
-#define ATOMICS_INLINE inline __attribute__((always_inline))
-#endif
+#	if defined(__STRICT_ANSI__) || !defined(__STDC_VERSION__) || (__STDC_VERSION__ < 199901L)
+#		define ATOMICS_INLINE __inline__ __attribute__((always_inline))
+#	else
+#		define ATOMICS_INLINE inline __attribute__((always_inline))
+#	endif
 #elif defined(__WATCOMC__) || defined(__DMC__)
-#define ATOMICS_INLINE __inline
+#	define ATOMICS_INLINE __inline
 #else
-#define ATOMICS_INLINE
+#	define ATOMICS_INLINE
 #endif
 /* End Inline */
 
@@ -340,8 +340,15 @@ static ATOMICS_INLINE llong __stdcall __atomic_exchange_explicit_64(atomic_llong
 	static ATOMICS_INLINE bool __stdcall __atomic_compare_exchange_strong_explicit(atomic_long *a, long *cmp, long xchg, atomic_memory_order mo) {
 		return __atomic_compare_exchange_strong_32(a, cmp, xchg, mo);
 	}
+
 /* stores a value in an atomic object */
-#define atomic_store_explicit(obj, desired, order)  (void)_InterlockedExchange((atomic_long*)obj, (long)desired)
+#define atomic_store_explicit(obj, desired, order)  	(void)_InterlockedExchange((atomic_long*)obj, (long)desired)
+/* atomic bitwise AND */
+#define atomic_fetch_and_explicit(dst, mask, order)		_InterlockedAnd((atomic_long *)dst, (long)mask)
+/* atomic bitwise OR */
+#define atomic_fetch_or_explicit(dst, mask, order)		_InterlockedOr((atomic_long *)dst, (long)mask)
+/* atomic bitwise exclusive OR */
+#define atomic_fetch_xor_explicit(dst, mask, order)		_InterlockedXor((atomic_long *)dst, (long)mask)
 #else
 	static ATOMICS_INLINE llong __stdcall __atomic_load_explicit(atomic_llong *ptr, atomic_memory_order order) {
 		(void)order;
@@ -367,35 +374,41 @@ static ATOMICS_INLINE llong __stdcall __atomic_exchange_explicit_64(atomic_llong
 	}
 /* stores a value in an atomic object */
 #define atomic_store_explicit(object, desired, order)	(void)_InterlockedExchange64((atomic_llong*)object, (llong)desired)
+/* atomic bitwise AND */
+#define atomic_fetch_and_explicit(dst, mask, order)		_InterlockedAnd64((atomic_llong *)dst, (llong)mask)
+/* atomic bitwise OR */
+#define atomic_fetch_or_explicit(dst, mask, order)		_InterlockedOr64((atomic_llong *)dst, (llong)mask)
+/* atomic bitwise exclusive OR */
+#define atomic_fetch_xor_explicit(dst, mask, order)		_InterlockedXor64((atomic_llong *)dst, (llong)mask)
 #endif
 
 /* sets an atomic_flag to true and returns the old value */
 #define atomic_flag_test_and_set_explicit(ptr, order)	(bool)_InterlockedExchange8((atomic_flag*)ptr, (char)1)
 /* reads an atomic_flag */
-#define atomic_flag_load_explicit(ptr, order)	(bool)_InterlockedCompareExchange8((atomic_flag*)ptr, 0, 0)
+#define atomic_flag_load_explicit(ptr, order)			(bool)_InterlockedCompareExchange8((atomic_flag*)ptr, 0, 0)
 /* sets an atomic_flag to false */
-#define atomic_flag_clear_explicit(ptr, order)	(bool)_InterlockedExchange8((atomic_flag*)ptr, 0)
+#define atomic_flag_clear_explicit(ptr, order)			(bool)_InterlockedExchange8((atomic_flag*)ptr, 0)
 /* swaps a value with an atomic object if the old value is what is expected, otherwise reads the old value */
 #define atomic_compare_exchange_strong_explicit(dst, expected, desired, successOrder, failureOrder)	\
-	__atomic_compare_exchange_strong_explicit(dst, (void*)expected, desired, successOrder)
+		__atomic_compare_exchange_strong_explicit(dst, (void*)expected, desired, successOrder)
 
 /* swaps a value with an atomic object if the old value is what is expected, otherwise reads the old value */
-#define atomic_compare_exchange_weak_explicit(obj, expected, desired, succ, fail)	\
-    atomic_compare_exchange_strong_explicit(obj, expected, desired, succ, fail)
+#define atomic_compare_exchange_weak_explicit(obj, expected, desired, succ, fail)					\
+    	atomic_compare_exchange_strong_explicit(obj, expected, desired, succ, fail)
 
 /* reads a value from an atomic object */
-#define atomic_load_explicit(object, order)		__atomic_load_explicit((atomic_ullong *)object, order)
-#define atomic_load_explicit_32(object, order)	__atomic_load_32((atomic_long *)object, order)
-	/* swaps a value with the value of an atomic object */
+#define atomic_load_explicit(object, order)				__atomic_load_explicit((atomic_ullong *)object, order)
+#define atomic_load_explicit_32(object, order)			__atomic_load_32((atomic_long *)object, order)
+/* swaps a value with the value of an atomic object */
 #define atomic_exchange_explicit(object, desired, order)	        \
-    __atomic_exchange_explicit((atomic_ullong *)object, (atomic_ullong)desired, order)
+		__atomic_exchange_explicit((atomic_ullong *)object, (atomic_ullong)desired, order)
 
 /* atomic addition */
-#define atomic_fetch_add_explicit(obj, arg, order)	__atomic_fetch_add_explicit((atomic_ptr_t *)obj, arg, order)
+#define atomic_fetch_add_explicit(obj, arg, order)		__atomic_fetch_add_explicit((atomic_ptr_t *)obj, arg, order)
 /* atomic subtraction */
-#define atomic_fetch_sub_explicit(obj, arg, order)	__atomic_fetch_sub_explicit((atomic_ptr_t *)obj, arg, order)
+#define atomic_fetch_sub_explicit(obj, arg, order)		__atomic_fetch_sub_explicit((atomic_ptr_t *)obj, arg, order)
 #elif defined(__clang__) || (defined(__GNUC__) && (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 7)))
-	/* Modern GCC atomic built-ins. */
+/* Modern GCC atomic built-ins. */
 #define ATOMIC_HAS_NATIVE_COMPARE_EXCHANGE
 #define ATOMIC_HAS_NATIVE_IS_LOCK_FREE
 
@@ -406,12 +419,14 @@ static ATOMICS_INLINE llong __stdcall __atomic_exchange_explicit_64(atomic_llong
 #define atomic_signal_fence(order)                           __atomic_signal_fence(order)
 
 /* swaps a value with an atomic object if the old value is what is expected, otherwise reads the old value */
-#define atomic_compare_exchange_strong_explicit(dst, expected, desired, successOrder, failureOrder)   __atomic_compare_exchange_n(dst, expected, desired, 0, successOrder, failureOrder)
+#define atomic_compare_exchange_strong_explicit(dst, expected, desired, successOrder, failureOrder)		\
+		__atomic_compare_exchange_n(dst, expected, desired, 0, successOrder, failureOrder)
 
 /* swaps a value with an atomic object if the old value is what is expected, otherwise reads the old value */
-#define atomic_compare_exchange_weak_explicit(dst, expected, desired, successOrder, failureOrder)     __atomic_compare_exchange_n(dst, expected, desired, 1, successOrder, failureOrder)
-#define atomic_compare_exchange_weak_explicit_32(obj, expected, desired, succ, fail)	\
-    atomic_compare_exchange_weak_explicit(obj, expected, desired, succ, fail)
+#define atomic_compare_exchange_weak_explicit(dst, expected, desired, successOrder, failureOrder)		\
+		__atomic_compare_exchange_n(dst, expected, desired, 1, successOrder, failureOrder)
+#define atomic_compare_exchange_weak_explicit_32(obj, expected, desired, succ, fail)					\
+    	atomic_compare_exchange_weak_explicit(obj, expected, desired, succ, fail)
 #define atomic_load_explicit(object, order)				__atomic_load_n(object, order)
 #define atomic_load_explicit_32(object, order)			atomic_load_explicit(object, order)
 #define atomic_exchange_explicit(dst, src, order)		__atomic_exchange_n(dst, src, order)
@@ -692,7 +707,7 @@ static ATOMICS_INLINE llong __stdcall __atomic_exchange_explicit_64(atomic_llong
 #define atomic_flag_load_explicit(ptr, order)                atomic_load_explicit(ptr, order)
 #endif
 
-/* Spinlock */
+	/* Spinlock */
 	typedef atomic_bool	atomic_spinlock;
 	static ATOMICS_INLINE void atomic_spinlock_lock(atomic_spinlock *pSpinlock) {
 		for (;;) {
@@ -773,37 +788,33 @@ static ATOMICS_INLINE llong __stdcall __atomic_exchange_explicit_64(atomic_llong
 
 #if !defined(_STDATOMIC_H)
 /* reads an atomic_flag */
-#define atomic_flag_load(ptr)	atomic_flag_load_explicit((atomic_flag *)ptr, memory_order_seq_cst)
-
+#define atomic_flag_load(ptr)				atomic_flag_load_explicit((atomic_flag *)ptr, memory_order_seq_cst)
 /* sets an atomic_flag to false */
-#define atomic_flag_clear(object)	atomic_flag_clear_explicit(object, memory_order_seq_cst)
-
+#define atomic_flag_clear(object)			atomic_flag_clear_explicit(object, memory_order_seq_cst)
 /* sets an atomic_flag to true and returns the old value */
 #define atomic_flag_test_and_set(object)	atomic_flag_test_and_set_explicit(object, memory_order_seq_cst)
-
 /* stores a value in an atomic object */
-#define atomic_store(object, desired)	atomic_store_explicit(object, desired, memory_order_seq_cst)
-
+#define atomic_store(object, desired)		atomic_store_explicit(object, desired, memory_order_seq_cst)
 /* reads a value from an atomic object */
-#define atomic_load(obj)	atomic_load_explicit(obj, memory_order_seq_cst)
-
+#define atomic_load(obj)					atomic_load_explicit(obj, memory_order_seq_cst)
 /* swaps a value with the value of an atomic object */
 #define atomic_exchange(object, desired)	atomic_exchange_explicit(object, desired, memory_order_seq_cst)
-
-//#define atomic_compare_exchange_weak(obj, expected, desired)	atomic_cas((atomic_ptr_t*)obj, expected, desired)
-//#define atomic_compare_exchange_strong(obj, expected, desired)	atomic_cas((atomic_ptr_t*)obj, expected, desired)
-
 /* swaps a value with an atomic object if the old value is what is expected, otherwise reads the old value */
-#define atomic_compare_exchange_strong(object, expected, desired)	atomic_compare_exchange_strong_explicit(object, expected, desired, memory_order_seq_cst, memory_order_seq_cst)
-
+#define atomic_compare_exchange_strong(object, expected, desired)	\
+		atomic_compare_exchange_strong_explicit(object, expected, desired, memory_order_seq_cst, memory_order_seq_cst)
 /* swaps a value with an atomic object if the old value is what is expected, otherwise reads the old value */
-#define atomic_compare_exchange_weak(object, expected, desired)		atomic_compare_exchange_weak_explicit(object, expected, desired, memory_order_seq_cst, memory_order_seq_cst)
-
+#define atomic_compare_exchange_weak(object, expected, desired)		\
+		atomic_compare_exchange_weak_explicit(object, expected, desired, memory_order_seq_cst, memory_order_seq_cst)
 /* atomic addition */
 #define atomic_fetch_add(object, operand)	atomic_fetch_add_explicit(object, operand, memory_order_seq_cst)
 /* atomic subtraction */
 #define atomic_fetch_sub(object, operand)	atomic_fetch_sub_explicit(object, operand, memory_order_seq_cst)
-
+/* atomic bitwise AND */
+#define atomic_fetch_and(object, operand)	atomic_fetch_and_explicit(object, operand, memory_order_seq_cst)
+/* atomic bitwise OR */
+#define atomic_fetch_or(object, operand)  	atomic_fetch_or_explicit(object, operand, memory_order_seq_cst)
+/* atomic bitwise exclusive OR */
+#define atomic_fetch_xor(object, operand)	atomic_fetch_xor_explicit(object, operand, memory_order_seq_cst)
 #endif
 
 #if defined(__arm__) || defined(_M_ARM) || defined(_M_ARM64) || defined(__mips) || defined(__mips__) || defined(__mips64) || defined(__mips32) || defined(__MIPSEL__) || defined(__MIPSEB__) || defined(__sparc__) || defined(__sparc64__) || defined(__sparc_v9__) || defined(__sparcv9) || defined(__riscv) || defined(__ARM64__)
