@@ -9,7 +9,6 @@
  *
  */
 
-
  ////////////
  ///
  /// Build time configurable limits
@@ -177,7 +176,7 @@
 
 #if defined(_WIN32) && defined(_MSC_VER)
 #include <fibersapi.h>
-static tls_t fls_key = 0;
+static tls_storage_t fls_key = 0;
 #endif
 
 #if PLATFORM_POSIX
@@ -235,7 +234,7 @@ extern int madvise(caddr_t, size_t, int);
 //////
 
 //! Current thread heap
-static tls_t _memory_thread_heap = 0;
+static tls_storage_t _memory_thread_heap = 0;
 
 //! Initialized flag
 static int _rpmalloc_initialized = 0;
@@ -264,51 +263,51 @@ make_atomic(unsigned long long, atomic64_t)
 
 #if defined(__TINYC__) && (defined(__arm__) || defined(__aarch64__) || defined(__riscv))
 static FORCEINLINE int32_t atomic_load32(atomic32_t *src) {
-    return atomic_load_explicit((volatile c89atomic_uint32 *)src, memory_order_relaxed);
+    return atomic_load_explicit(src, memory_order_relaxed);
 }
 static FORCEINLINE void atomic_store32(atomic32_t *dst, int32_t val) {
-    atomic_store_explicit((volatile c89atomic_uint32 *)dst, (c89atomic_uint32)val, memory_order_relaxed);
+    atomic_store_explicit(dst, val, memory_order_relaxed);
 }
 static FORCEINLINE int32_t atomic_incr32(atomic32_t *val) {
-    return atomic_fetch_add_explicit((volatile c89atomic_uint32 *)val, 1, memory_order_relaxed) + 1;
+    return atomic_fetch_add_explicit(val, 1, memory_order_relaxed) + 1;
 }
 static FORCEINLINE int32_t atomic_decr32(atomic32_t *val) {
-    return atomic_fetch_add_explicit((volatile c89atomic_uint32 *)val, -1, memory_order_relaxed) - 1;
+    return atomic_fetch_add_explicit(val, -1, memory_order_relaxed) - 1;
 }
 static FORCEINLINE int32_t atomic_add32(atomic32_t *val, int32_t add) {
-    return atomic_fetch_add_explicit((volatile c89atomic_uint32 *)val, (c89atomic_uint32)add, memory_order_relaxed) + add;
+    return atomic_fetch_add_explicit(val, add, memory_order_relaxed) + add;
 }
 static FORCEINLINE int atomic_cas32_acquire(atomic32_t *dst, int32_t val, int32_t ref) {
-    return atomic_compare_exchange_weak_explicit((volatile c89atomic_uint32 *)dst, &ref, (c89atomic_uint32)val, memory_order_acquire, memory_order_relaxed);
+    return atomic_compare_exchange_weak_explicit(dst, &ref, val, memory_order_acquire, memory_order_relaxed);
 }
 static FORCEINLINE void atomic_store32_release(atomic32_t *dst, int32_t val) {
-    atomic_store_explicit((volatile c89atomic_uint32 *)dst, (c89atomic_uint32)val, memory_order_release);
+    atomic_store_explicit(dst, val, memory_order_release);
 }
 #else
+
 static FORCEINLINE int32_t atomic_load32(atomic32_t *src) {
-    return c89atomic_load_explicit_32(src, memory_order_relaxed);
+    return atomic_load_explicit_32(src, memory_order_relaxed);
 }
 static FORCEINLINE void atomic_store32(atomic32_t *dst, int32_t val) {
-    c89atomic_store_explicit_32(dst, val, memory_order_relaxed);
+    atomic_store_explicit_32(dst, val, memory_order_relaxed);
 }
 static FORCEINLINE int32_t atomic_incr32(atomic32_t *val) {
-    return c89atomic_fetch_add_explicit_32(val, 1, memory_order_relaxed) + 1;
+    return atomic_fetch_add_explicit_32(val, 1, memory_order_relaxed) + 1;
 }
 static FORCEINLINE int32_t atomic_decr32(atomic32_t *val) {
-    return c89atomic_fetch_add_explicit_32(val, -1, memory_order_relaxed) - 1;
+	return atomic_fetch_add_explicit_32(val, -1, memory_order_relaxed) - 1;
 }
 static FORCEINLINE int32_t atomic_add32(atomic32_t *val, int32_t add) {
-    return c89atomic_fetch_add_explicit_32(val, add, memory_order_relaxed) + add;
+    return atomic_fetch_add_explicit_32(val, add, memory_order_relaxed) + add;
 }
 static FORCEINLINE int atomic_cas32_acquire(atomic32_t *dst, int32_t val, int32_t ref) {
-    return c89atomic_compare_exchange_weak_explicit_32(dst, &ref, val, memory_order_acquire, memory_order_relaxed);
+	return atomic_compare_exchange_weak_explicit_32(dst, &ref, val, memory_order_acquire, memory_order_relaxed);
 }
 static FORCEINLINE void atomic_store32_release(atomic32_t *dst, int32_t val) {
-    c89atomic_store_explicit_32(dst, val, memory_order_release);
+    atomic_store_explicit_32(dst, val, memory_order_release);
 }
 #endif
 
-#if defined(__arm__) || defined(_X86_) || defined(__i386__) || defined(__i486__) || defined(__i586__) || defined(__i686__)
 static FORCEINLINE void *atomic_load_ptr(atomic_ptr_t *src) {
     return (void *)atomic_load_explicit(src, memory_order_relaxed);
 }
@@ -324,32 +323,15 @@ static FORCEINLINE void *atomic_exchange_ptr_acquire(atomic_ptr_t *dst, void *va
 static FORCEINLINE int atomic_cas_ptr(atomic_ptr_t *dst, void *val, void *ref) {
     return (int)atomic_swap(dst, &ref, val);
 }
-#else
-static FORCEINLINE void *atomic_load_ptr(atomic_ptr_t *src) {
-    return (void *)c89atomic_load_explicit_64((volatile c89atomic_uint64 *)src, memory_order_relaxed);
-}
-static FORCEINLINE void atomic_store_ptr(atomic_ptr_t *dst, void *val) {
-    c89atomic_store_explicit_64((volatile c89atomic_uint64 *)dst, (c89atomic_uint64)val, memory_order_relaxed);
-}
-static FORCEINLINE void atomic_store_ptr_release(atomic_ptr_t *dst, void *val) {
-    c89atomic_store_explicit_64((volatile c89atomic_uint64 *)dst, (c89atomic_uint64)val, memory_order_release);
-}
-static FORCEINLINE void *atomic_exchange_ptr_acquire(atomic_ptr_t *dst, void *val) {
-    return (void *)c89atomic_exchange_explicit_64((volatile c89atomic_uint64 *)dst, (c89atomic_uint64)val, memory_order_acquire);
-}
-static FORCEINLINE int atomic_cas_ptr(atomic_ptr_t *dst, void *val, void *ref) {
-    return (int)atomic_swap((volatile c89atomic_uint64 *)dst, (c89atomic_uint64 *)&ref, (c89atomic_uint64)val);
-}
-#endif
 
 #if defined(__TINYC__) || !defined(_WIN32)
-int rpmalloc_tls_create(tls_t *key, tls_dtor_t dtor) {
+FORCEINLINE int rpmalloc_tls_create(tls_storage_t *key, tls_dtor_t dtor) {
     if (!key) return -1;
 
     return (pthread_key_create(key, dtor) == 0) ? 0 : -1;
 }
 
-FORCEINLINE void rpmalloc_tls_delete(tls_t key) {
+FORCEINLINE void rpmalloc_tls_delete(tls_storage_t key) {
     void *ptr = rpmalloc_tls_get(key);
     if (ptr != NULL)
         rpfree(ptr);
@@ -357,21 +339,21 @@ FORCEINLINE void rpmalloc_tls_delete(tls_t key) {
     pthread_key_delete(key);
 }
 
-FORCEINLINE void *rpmalloc_tls_get(tls_t key) {
+FORCEINLINE void *rpmalloc_tls_get(tls_storage_t key) {
     return pthread_getspecific(key);
 }
 
-FORCEINLINE int rpmalloc_tls_set(tls_t key, void *val) {
+FORCEINLINE int rpmalloc_tls_set(tls_storage_t key, void *val) {
     return (pthread_setspecific(key, val) == 0) ? 0 : -1;
 }
 
 #elif defined(_WIN32_PLATFORM_X86)
 static struct impl_tls_dtor_entry {
-    tls_t key;
+    tls_storage_t key;
     tls_dtor_t dtor;
 } impl_tls_dtor_tbl[EMULATED_THREADS_TSS_DTOR_SLOTNUM];
 
-static int impl_tls_dtor_register(tls_t key, tls_dtor_t dtor) {
+static int impl_tls_dtor_register(tls_storage_t key, tls_dtor_t dtor) {
     int i;
     for (i = 0; i < EMULATED_THREADS_TSS_DTOR_SLOTNUM; i++) {
         if (!impl_tls_dtor_tbl[i].dtor)
@@ -399,7 +381,7 @@ static void impl_tls_dtor_invoke() {
     }
 }
 
-int rpmalloc_tls_create(tls_t *key, tls_dtor_t dtor) {
+int rpmalloc_tls_create(tls_storage_t *key, tls_dtor_t dtor) {
     if (!key) return -1;
 
     *key = TlsAlloc();
@@ -413,38 +395,38 @@ int rpmalloc_tls_create(tls_t *key, tls_dtor_t dtor) {
     return (*key != 0xFFFFFFFF) ? 0 : -1;
 }
 
-FORCEINLINE void rpmalloc_tls_delete(tls_t key) {
+FORCEINLINE void rpmalloc_tls_delete(tls_storage_t key) {
     TlsFree(key);
 }
 
-FORCEINLINE void *rpmalloc_tls_get(tls_t key) {
+FORCEINLINE void *rpmalloc_tls_get(tls_storage_t key) {
     return TlsGetValue(key);
 }
 
-FORCEINLINE int rpmalloc_tls_set(tls_t key, void *val) {
+FORCEINLINE int rpmalloc_tls_set(tls_storage_t key, void *val) {
     return TlsSetValue(key, val) ? 0 : -1;
 }
 #else
-int rpmalloc_tls_create(tls_t *key, tls_dtor_t dtor) {
+int rpmalloc_tls_create(tls_storage_t *key, tls_dtor_t dtor) {
     if (!key) return -1;
 
     *key = FlsAlloc(dtor);
     return (*key != 0xFFFFFFFF) ? 0 : -1;
 }
 
-FORCEINLINE void rpmalloc_tls_delete(tls_t key) {
-    tls_t temp = key;
+FORCEINLINE void rpmalloc_tls_delete(tls_storage_t key) {
+    tls_storage_t temp = key;
     if (key != 0) {
         key = 0;
         FlsFree(temp);
     }
 }
 
-FORCEINLINE void *rpmalloc_tls_get(tls_t key) {
+FORCEINLINE void *rpmalloc_tls_get(tls_storage_t key) {
     return FlsGetValue(key);
 }
 
-FORCEINLINE int rpmalloc_tls_set(tls_t key, void *val) {
+FORCEINLINE int rpmalloc_tls_set(tls_storage_t key, void *val) {
     return FlsSetValue(key, val) ? 0 : -1;
 }
 #endif

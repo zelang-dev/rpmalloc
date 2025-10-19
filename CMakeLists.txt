@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.8...3.14)
 
 project(
     rpmalloc
-    VERSION 2.1.6
+    VERSION 2.2.0
     DESCRIPTION "General Purpose Memory Allocator"
     HOMEPAGE_URL "https://github.com/zelang-dev/rpmalloc"
     LANGUAGES C
@@ -39,7 +39,7 @@ cmake_dependent_option(BUILD_TESTING
 option(BUILD_SHARED_LIBS    "Build the library as a shared (dynamically-linked) " OFF)
 
 if(UNIX)
-    set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -g -D ENABLE_ASSERTS=1")
+    set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -D ENABLE_ASSERTS=1")
 else()
     set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} /D ENABLE_ASSERTS=1 ")
     add_definitions("/wd4244")

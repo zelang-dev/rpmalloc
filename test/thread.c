@@ -39,6 +39,14 @@ thread_entry(void* argptr) {
 
 #endif
 
+void assert_expected(size_t res, size_t expected, const char *file, unsigned int line, const char *expr, const char *expected_str) {
+	if (res != expected) {
+		fflush(stdout);
+		fprintf(stderr, "%s:%u: %s: error %zu, expected %s\n", file, line, expr, res, expected_str);
+		abort();
+	}
+}
+
 uintptr_t
 thread_run(thread_arg* arg) {
 #ifdef _WIN32

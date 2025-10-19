@@ -12,6 +12,15 @@ add_test(NAME main_test COMMAND main_test)
 add_test(NAME storage_test COMMAND storage_test)
 add_test(NAME atomicity_test COMMAND atomicity_test)
 
+## catomic tests
+add_executable(test-spmc thread.c test-spmc.c)
+target_link_libraries(test-spmc rpmalloc)
+add_test(NAME test-spmc COMMAND test-spmc)
+
+add_executable(test-mpsc thread.c test-mpsc.c)
+target_link_libraries(test-mpsc rpmalloc)
+add_test(NAME test-mpsc COMMAND test-mpsc)
+
 ## stress test
 add_executable(test-stress test-stress.c)
 target_link_libraries(test-stress rpmalloc)

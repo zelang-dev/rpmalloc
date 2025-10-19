@@ -300,11 +300,11 @@ rpmalloc_linker_reference(void);
 #   include <pthread.h>
 #endif
 
-typedef pthread_key_t tls_t;
+typedef pthread_key_t tls_storage_t;
 typedef void (*tls_dtor_t)(void *);
 #else
 #include <windows.h>
-typedef DWORD tls_t;
+typedef DWORD tls_storage_t;
 #ifdef _WIN32_PLATFORM_X86
 /* see TLS_MAXIMUM_AVAILABLE */
 #define EMULATED_THREADS_TSS_DTOR_SLOTNUM 1088
@@ -317,15 +317,15 @@ typedef void(__stdcall *tls_dtor_t)(PVOID lpFlsData);
 #include <stdlib.h>
 #include <stdbool.h>
 
-C_API int rpmalloc_tls_create(tls_t *key, tls_dtor_t dtor);
-C_API void rpmalloc_tls_delete(tls_t key);
-C_API void *rpmalloc_tls_get(tls_t key);
-C_API int rpmalloc_tls_set(tls_t key, void *val);
+C_API int rpmalloc_tls_create(tls_storage_t *key, tls_dtor_t dtor);
+C_API void rpmalloc_tls_delete(tls_storage_t key);
+C_API void *rpmalloc_tls_get(tls_storage_t key);
+C_API int rpmalloc_tls_set(tls_storage_t key, void *val);
 C_API void rpmalloc_shutdown(void);
 C_API void rpmalloc_init(void);
 
-#if defined(__TINYC__) && !defined(thread_storage)
-#define thread_storage_get(type, var)                   \
+#if defined(__TINYC__) && !defined(tls_storage)
+#define tls_storage_get(type, var)						\
         type* var(void) {                               \
             if (rpmalloc_##var##_tls == 0) {            \
                 rpmalloc_##var##_tls = sizeof(type);    \
@@ -348,7 +348,7 @@ C_API void rpmalloc_init(void);
             return NULL;                                \
         }
 
-#define thread_storage_delete(type, var)    \
+#define tls_storage_delete(type, var)    \
         void var##_delete(void) {           \
             if(rpmalloc_##var##_tls != 0) { \
                 rpmalloc_##var##_tls = 0;   \
@@ -359,22 +359,22 @@ C_API void rpmalloc_init(void);
         }
 
 /* Initialize and setup thread local storage `var` name as functions. */
-#define thread_storage(type, var)           \
+#define tls_storage(type, var)           \
         int rpmalloc_##var##_tls = 0;       \
-        tls_t rpmalloc_##var##_tss = 0;     \
-        thread_storage_delete(type, var)    \
-        thread_storage_get(type, var)
+        tls_storage_t rpmalloc_##var##_tss = 0;     \
+        tls_storage_delete(type, var)    \
+        tls_storage_get(type, var)
 
-#define thread_storage_proto(type, var, prefix) \
+#define tls_storage_proto(type, var, prefix) \
         prefix int rpmalloc_##var##_tls;        \
-        prefix tls_t rpmalloc_##var##_tss;      \
+        prefix tls_storage_t rpmalloc_##var##_tss;      \
         prefix type* var(void);                 \
         prefix void var##_delete(void);
 
 /* Creates a compile time thread local storage variable */
-#define thread_storage_create(type, var) thread_storage_proto(type, var, C_API)
-#elif !defined(thread_storage) /* __TINYC__ */
-#define thread_storage_get(type, var)                   \
+#define tls_storage_extern(type, var) tls_storage_proto(type, var, C_API)
+#elif !defined(tls_storage) /* __TINYC__ */
+#define tls_storage_get(type, var)                   \
         type* var(void) {                               \
             if (rpmalloc_##var##_tls == 0) {            \
                 rpmalloc_##var##_tls = sizeof(type);    \
@@ -397,7 +397,7 @@ C_API void rpmalloc_init(void);
             return NULL;                                \
         }
 
-#define thread_storage_delete(type, var)    \
+#define tls_storage_delete(type, var)    \
         void var##_delete(void) {           \
             if(rpmalloc_##var##_tls != 0) { \
                 rpmalloc_##var##_tls = 0;   \
@@ -408,21 +408,21 @@ C_API void rpmalloc_init(void);
         }
 
 /* Initialize and setup thread local storage `var` name as functions. */
-#define thread_storage(type, var)           \
+#define tls_storage(type, var)           \
         int rpmalloc_##var##_tls = 0;       \
-        tls_t rpmalloc_##var##_tss = 0;     \
-        thread_storage_delete(type, var)    \
-        thread_storage_get(type, var)
+        tls_storage_t rpmalloc_##var##_tss = 0;     \
+        tls_storage_delete(type, var)    \
+        tls_storage_get(type, var)
 
-#define thread_storage_proto(type, var, prefix) \
+#define tls_storage_proto(type, var, prefix) \
         prefix int rpmalloc_##var##_tls;        \
-        prefix tls_t rpmalloc_##var##_tss;      \
+        prefix tls_storage_t rpmalloc_##var##_tss;      \
         prefix type* var(void);                 \
         prefix void var##_delete(void);
 
 /* Creates a compile time thread local storage variable */
-#define thread_storage_create(type, var) thread_storage_proto(type, var, C_API)
-#endif /* thread_storage */
+#define tls_storage_extern(type, var) tls_storage_proto(type, var, C_API)
+#endif /* tls_storage */
 
 //! Override standard library malloc/free etc macros
 #undef memalign

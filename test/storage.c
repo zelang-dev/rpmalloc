@@ -33,10 +33,10 @@
 #define pointer_offset(ptr, ofs) (void*)((char*)(ptr) + (ptrdiff_t)(ofs))
 #define pointer_diff(first, second) (ptrdiff_t)((const char*)(first) - (const char*)(second))
 
-thread_storage_create(int, gLocalVar)
+tls_storage_extern(int, gLocalVar)
 static size_t hardware_threads;
 static int test_failed;
-thread_storage(int, gLocalVar)
+tls_storage(int, gLocalVar)
 
 static void
 test_initialize(void);
@@ -98,7 +98,7 @@ static int thread_test_local_storage(void *aArg) {
 
 #define THREAD_COUNT 5
 
-int test_thread_storage(void) {
+int test_tls_storage(void) {
     intptr_t thread[THREAD_COUNT];
     thread_arg targ[THREAD_COUNT];
     int i;
@@ -143,7 +143,7 @@ int test_run(int argc, char **argv) {
     (void)sizeof(argc);
     (void)sizeof(argv);
     test_initialize();
-    if (test_thread_storage())
+    if (test_tls_storage())
         return -1;
     if (test_error())
         return -1;

@@ -1,3 +1,7 @@
+2.2.0
+
+- Atomic routine API from https://github.com/zelang-dev/c-atomics, document emulate `thread_local` macros.
+
 2.0.0
 
 - Fixes for building under riscv64, s390x, and ppc64le cpu's, and Tiny C Compiler
