@@ -248,7 +248,7 @@ static int _rpmalloc_shuting_down = 0;
 #   endif
 #   include "stdatomic.h"
 #endif
-#include "catomic.h"
+#include "catomics.h"
 
 #ifdef _WIN32
 #	define EXPECTED(x) (x)
